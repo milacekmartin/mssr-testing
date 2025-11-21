@@ -8,8 +8,8 @@ import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.settings import HOST
 
-USERNAME = "martin.milacek@annotation.sk"
-PASSWORD = "Initial0!"
+USERNAME = ""
+PASSWORD = ""
 
 
 def decode_html_entities(s: str):

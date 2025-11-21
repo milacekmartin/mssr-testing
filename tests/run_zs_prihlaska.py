@@ -31,8 +31,8 @@ from payloads.vyhladavanie import (
 )
 
 # Prihlasovacie údaje
-USERNAME = "martin.milacek@professional-test-automation.com"
-PASSWORD = "Initial0!"
+USERNAME = ""
+PASSWORD = ""
 ACS_URL = f"{HOST}/assertionconsumerservice"
 
 CTX = "ZS-FLOW"
