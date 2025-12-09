@@ -1,3 +1,5 @@
+# yaml-language-server: disable
+
 name: Child Tests
 
 on:
@@ -5,15 +7,14 @@ on:
   push:
     branches: [ main, master ]
 
+permissions:
+  contents: read
+  pages: write       # REQUIRED
+  id-token: write    # REQUIRED
+
 jobs:
   child-tests:
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      actions: read   # potrebné na volanie Actions API
-      id-token: write
-
     steps:
       - uses: actions/checkout@v4
 
@@ -36,31 +37,32 @@ jobs:
           python3 tests/child/full_flow.py --show-data | tee full_flow.log
         continue-on-error: true
 
-      - name: Generate HTML reports
+      - name: Generate HTML report
         run: |
-          python3 utils/generate_html_report.py "Child Tests - Create" create_tests.log create_tests_report.html
-          python3 utils/generate_html_report.py "Child Tests - Full Flow" full_flow.log full_flow_report.html
+          mkdir -p pages/child
+          python3 utils/generate_html_report.py "Child Tests - Create" create_tests.log pages/child/create_tests_report.html
+          python3 utils/generate_html_report.py "Child Tests - Full Flow" full_flow.log pages/child/full_flow_report.html
 
-      # ---------------------------
-      # UPLOAD ARTIFACT
-      # ---------------------------
-      - name: Upload artifacts
-        id: upload_reports
-        uses: actions/upload-artifact@v4
+      # -----------------------------
+      # UPLOAD TO GITHUB PAGES
+      # -----------------------------
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: child-tests-report
-          path: |
-            *.log
-            *.html
+          path: pages
 
-      # ---------------------------
-      # CREATE DIRECT LINK IN SUMMARY
-      # ---------------------------
-      - name: Add HTML report link to summary
-        run: |
-          ARTIFACT_ID=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts --jq '.artifacts[] | select(.name=="child-tests-report") | .id')
-          ARTIFACT_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/$ARTIFACT_ID"
-          echo "### 🔗 Child Tests Report" >> $GITHUB_STEP_SUMMARY
-          echo "[Klikni sem pre stiahnutie reportu]($ARTIFACT_URL)" >> $GITHUB_STEP_SUMMARY
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  deploy-pages:
+    needs: child-tests
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
