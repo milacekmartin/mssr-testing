@@ -1,0 +1,44 @@
+name: Child Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  child-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install requests beautifulsoup4
+
+      - name: Run create_tests.py
+        run: |
+          echo "🚀 Running CHILD create tests..."
+          python3 tests/child/create_tests.py --show-data
+
+      - name: Run full_flow.py
+        run: |
+          echo "🚀 Running CHILD full flow..."
+          python3 tests/child/full_flow.py --show-data
+
+      - name: Upload outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: child-tests-output
+          path: |
+            **/*.log
+            **/*.json
+            **/*.txt
+          retention-days: 14

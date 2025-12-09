@@ -1,0 +1,39 @@
+name: Prihlaska Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  prihlaska-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install requests beautifulsoup4
+
+      - name: Run full prihlaska flow
+        run: |
+          echo "🚀 Running PRIHLASKA full flow..."
+          python3 tests/prihlaska/full_flow.py --show-data
+
+      - name: Upload outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: prihlaska-tests-output
+          path: |
+            **/*.log
+            **/*.json
+            **/*.txt
+          retention-days: 14
