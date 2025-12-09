@@ -52,12 +52,18 @@ jobs:
         if: ${{ always() }}
         run: |
           mkdir -p pages/loadtest
-          mv report.html pages/loadtest/report.html
-          mv results_stats.csv pages/loadtest/
-          mv results_requests.csv pages/loadtest/
-          mv results_failures.csv pages/loadtest/
-          # update global index
+
+          # Move HTML report
+          if [ -f report.html ]; then mv report.html pages/loadtest/report.html; fi
+
+          # Move generated CSV reports (only if they exist)
+          if [ -f results_stats.csv ]; then mv results_stats.csv pages/loadtest/; fi
+          if [ -f results_requests.csv ]; then mv results_requests.csv pages/loadtest/; fi
+          if [ -f results_failures.csv ]; then mv results_failures.csv pages/loadtest/; fi
+
+          # Update global index
           python3 utils/generate_html_report.py index
+
 
       # --- UPLOAD STATIC SITE ARTIFACT ---
       - name: Upload GitHub Pages Artifact
