@@ -42,8 +42,7 @@ jobs:
           mkdir -p pages/child
           python3 utils/generate_html_report.py "Child Tests - Create" create_tests.log pages/child/create_tests_report.html
           python3 utils/generate_html_report.py "Child Tests - Full Flow" full_flow.log pages/child/full_flow_report.html
-          python3 utils/generate_index.py       # 🔥 vygeneruje pages/index.html
-
+          python3 utils/generate_html_report.py index   # 🔥 TERAZ TO FUNGUJE
 
       # -----------------------------
       # UPLOAD TO GITHUB PAGES
