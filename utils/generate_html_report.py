@@ -50,7 +50,7 @@ def generate_index(output_path="pages/index.html"):
     </style>
 </head>
 <body>
-    <h1>📊 Test Reports</h1>
+    <h1>📊 Test Reports Dashboard</h1>
     <p><strong>Generated:</strong> {now}</p>
 
     <h2>Child Tests</h2>
@@ -58,6 +58,15 @@ def generate_index(output_path="pages/index.html"):
         <li><a href="child/create_tests_report.html">Create Tests Report</a></li>
         <li><a href="child/full_flow_report.html">Full Flow Report</a></li>
     </ul>
+
+    <h2>Load Tests (Locust)</h2>
+    <ul>
+        <li><a href="loadtest/report.html">Locust HTML Report</a></li>
+        <li><a href="loadtest/results_stats.csv">Statistics CSV</a></li>
+        <li><a href="loadtest/results_requests.csv">Requests CSV</a></li>
+        <li><a href="loadtest/results_failures.csv">Failures CSV</a></li>
+    </ul>
+
 </body>
 </html>
 """
@@ -67,17 +76,3 @@ def generate_index(output_path="pages/index.html"):
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(html_index)
 
-
-if __name__ == "__main__":
-    # MODE: index or report
-    if sys.argv[1] == "index":
-        generate_index()
-    else:
-        title = sys.argv[1]
-        log_file = sys.argv[2]
-        output = sys.argv[3]
-
-        with open(log_file, "r", encoding="utf-8") as f:
-            log_text = f.read()
-
-        generate_html_report(title, log_text, output)

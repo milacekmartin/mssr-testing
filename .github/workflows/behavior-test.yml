@@ -7,6 +7,11 @@ on:
       - main
       - master
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
   loadtest:
     runs-on: ubuntu-latest
@@ -29,7 +34,7 @@ jobs:
           pip install locust requests beautifulsoup4
 
       # --- RUN LOCUST ---
-      - name: Run Locust ZŠ scenár
+      - name: Run Locust ZŠ scénár
         run: |
           python3 -m locust -f locustfile_zs.py \
             --headless \
@@ -40,15 +45,37 @@ jobs:
             --html report.html \
             --only-summary \
             --host https://test-eprihlasky.iedu.sk
+        continue-on-error: true
 
-      # --- UPLOAD RESULTS ---
-      - name: Upload Locust Results (CSV + HTML)
-        uses: actions/upload-artifact@v4
+      # --- GENERATE HTML REPORT + INDEX ---
+      - name: Prepare HTML for GitHub Pages
+        if: ${{ always() }}
+        run: |
+          mkdir -p pages/loadtest
+          mv report.html pages/loadtest/report.html
+          mv results_stats.csv pages/loadtest/
+          mv results_requests.csv pages/loadtest/
+          mv results_failures.csv pages/loadtest/
+          # update global index
+          python3 utils/generate_html_report.py index
+
+      # --- UPLOAD STATIC SITE ARTIFACT ---
+      - name: Upload GitHub Pages Artifact
+        if: ${{ always() }}
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: locust-report
-          path: |
-            report.html
-            results_stats.csv
-            results_failures.csv
-            results_requests.csv
-          retention-days: 14
+          path: pages
+
+  # --- DEPLOYMENT JOB ---
+  deploy-pages:
+    needs: loadtest
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
