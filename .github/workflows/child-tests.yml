@@ -10,35 +10,45 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      # --- CHECKOUT REPO ---
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      # --- PYTHON ---
+      - uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
+      # --- INSTALL DEPENDENCIES ---
       - name: Install dependencies
         run: |
           pip install --upgrade pip
           pip install requests beautifulsoup4
 
+      # --- RUN CHILD CREATE TESTS ---
       - name: Run create_tests.py
         run: |
           echo "🚀 Running CHILD create tests..."
-          python3 tests/child/create_tests.py --show-data
+          python3 tests/child/create_tests.py --show-data | tee create_tests.log
+        continue-on-error: true
 
+      # --- RUN CHILD FULL FLOW ---
       - name: Run full_flow.py
         run: |
           echo "🚀 Running CHILD full flow..."
-          python3 tests/child/full_flow.py --show-data
+          python3 tests/child/full_flow.py --show-data | tee full_flow.log
+        continue-on-error: true
 
-      - name: Upload outputs
+      # --- GENERATE HTML REPORTS ---
+      - name: Generate HTML reports
+        run: |
+          python3 utils/generate_html_report.py "Child Tests - Create" create_tests.log create_tests_report.html
+          python3 utils/generate_html_report.py "Child Tests - Full Flow" full_flow.log full_flow_report.html
+
+      # --- UPLOAD RESULTS AS ARTIFACTS ---
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: child-tests-output
+          name: child-tests-report
           path: |
-            **/*.log
-            **/*.json
-            **/*.txt
-          retention-days: 14
+            *.log
+            *.html

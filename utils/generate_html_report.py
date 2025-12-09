@@ -1,0 +1,45 @@
+import sys, datetime, html
+
+def generate_html_report(title, log_text, output_file):
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    html_content = f"""
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>{title}</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; padding: 20px; }}
+        h1 {{ color: #2c3e50; }}
+        pre {{
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+        }}
+        .pass {{ color: green; font-weight: bold; }}
+        .fail {{ color: red; font-weight: bold; }}
+    </style>
+</head>
+<body>
+    <h1>{title}</h1>
+    <p><strong>Generated:</strong> {now}</p>
+    <h2>Raw Output</h2>
+    <pre>{html.escape(log_text)}</pre>
+</body>
+</html>
+"""
+
+    with open(output_file, "w", encoding="utf-8") as f:
+        f.write(html_content)
+
+
+if __name__ == "__main__":
+    title = sys.argv[1]
+    log_file = sys.argv[2]
+    output = sys.argv[3]
+
+    with open(log_file, "r", encoding="utf-8") as f:
+        log_text = f.read()
+
+    generate_html_report(title, log_text, output)
