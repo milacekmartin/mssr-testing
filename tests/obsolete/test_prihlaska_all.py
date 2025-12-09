@@ -45,8 +45,8 @@ from tests.prihlaska.payloads.koncept import (
 )
 
 # Prihlasovacie údaje
-USERNAME = ""
-PASSWORD = ""
+USERNAME = "martin.milacek@professional-test-automation.com"
+PASSWORD = "Initial0!"
 ACS_URL = f"{HOST}/assertionconsumerservice"
 
 CTX = "PRIHLASKA-FLOW"

@@ -15,8 +15,8 @@ from config.settings import HOST
 
 
 # Prihlasovacie údaje
-USERNAME = ""
-PASSWORD = ""
+USERNAME = "martin.milacek@professional-test-automation.com"
+PASSWORD = "Initial0!"
 ACS_URL = f"{HOST}/assertionconsumerservice"
 
 

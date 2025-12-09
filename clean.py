@@ -1,62 +1,85 @@
 #!/usr/bin/env python3
-import requests
-import json
 import sys
+import os
 import time
+import json
+import requests
 
 # ----------------------------------------------------------
-#  IMPORTY Z CONFIG
+# ROOT IMPORT
 # ----------------------------------------------------------
-from config.settings import (
-    HOST,
-    CSRF,
-    IAM_TOKEN,
-    COOKIE_BUNDLE,
-    SUBJEKT_GUID
-)
+ROOT = os.path.dirname(os.path.abspath(__file__))
+PARENT = os.path.dirname(ROOT)
+sys.path.append(PARENT)
+
+from login.saml_login import saml_login
+from config.env import HOST
+
+
+CTX = "CLEAN"
 
 
 # ----------------------------------------------------------
-#  HLAVIČKY – rovnaké ako COMMON_HEADERS
+# UNIFIED SEND POST
 # ----------------------------------------------------------
-HEADERS = {
-    "Content-Type": "application/json; charset=UTF-8",
-    "Requestverificationtoken": CSRF,
-    "X-Token-Descriptor": IAM_TOKEN,
-    "Cookie": COOKIE_BUNDLE
-}
+def send_post(login, ctx, endpoint, payload, show_data=False):
+    url = f"{HOST}{endpoint}"
+
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json; charset=UTF-8",
+        "Origin": HOST,
+        "Referer": f"{HOST}/Moj-profil2",
+        "RequestVerificationToken": login.csrf,
+        "x-token-descriptor": login.token_desc,
+        "Cookie": login.cookie_bundle,
+        "X-Requested-With": "XMLHttpRequest",
+        "User-Agent": "Mozilla/5.0",
+    }
+
+    print(f"[{ctx}] POST {endpoint}")
+
+    if show_data:
+        print("\n📤 REQUEST PAYLOAD:")
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+
+    resp = login.session.post(url, json=payload, headers=headers)
+    print(f"[{ctx}] → {resp.status_code}")
+
+    if show_data:
+        print("\n📥 RESPONSE:")
+        try:
+            print(json.dumps(resp.json(), indent=2, ensure_ascii=False))
+        except:
+            print(resp.text)
+        print()
+
+    return resp
 
 
 # ----------------------------------------------------------
 #  PRÁCA S PRIHLÁŠKAMI
 # ----------------------------------------------------------
+def get_prihlasky(login, show_data=False):
+    payload = {"SubjektGUID": login.subj_guid}
 
-def get_prihlasky():
-    """Načíta zoznam prihlášok pre subjekt."""
-    url = f"{HOST}/api/vratenieZoznamuPrihlasokSubjektu"
-    payload = {"SubjektGUID": SUBJEKT_GUID}
-
-    resp = requests.post(url, json=payload, headers=HEADERS)
+    resp = send_post(login, CTX, "/api/vratenieZoznamuPrihlasokSubjektu", payload, show_data)
 
     if resp.status_code != 200:
-        print(f"❌ Chyba pri načítaní prihlášok: {resp.status_code}")
+        print(f"❌ Nepodarilo sa načítať prihlášky!")
         print(resp.text)
         sys.exit(1)
 
     data = resp.json()
     prihlasky = data.get("prihlaska", [])
-
     print(f"🔍 Našiel som {len(prihlasky)} prihlášok.")
     return prihlasky
 
 
-def delete_prihlaska(guid):
-    """Vymaže prihlášku podľa GUID."""
-
-    url = f"{HOST}/api/vymazPrihlasky"
+def delete_prihlaska(login, guid, show_data=False):
     payload = {"PrihlaskaGUID": guid}
 
-    resp = requests.post(url, json=payload, headers=HEADERS)
+    resp = send_post(login, CTX, "/api/vymazPrihlasky", payload, show_data)
 
     if resp.status_code != 200:
         print(f"❌ Chyba pri mazaní prihlášky {guid}:")
@@ -70,32 +93,26 @@ def delete_prihlaska(guid):
 # ----------------------------------------------------------
 #  PRÁCA S DEŤMI
 # ----------------------------------------------------------
+def get_deti(login, show_data=False):
+    payload = {"guid": login.subj_guid, "lenPlatne": True}
 
-def get_deti():
-    """Načíta všetky deti v subjekte."""
-    url = f"{HOST}/api/vratenieZoznamuDeti"
-    payload = {"guid": SUBJEKT_GUID, "lenPlatne": True}
-
-    resp = requests.post(url, json=payload, headers=HEADERS)
+    resp = send_post(login, CTX, "/api/vratenieZoznamuDeti", payload, show_data)
 
     if resp.status_code != 200:
-        print(f"❌ Chyba pri načítaní detí: {resp.status_code}")
+        print(f"❌ Chyba pri načítaní detí!")
         print(resp.text)
         sys.exit(1)
 
     data = resp.json()
     deti = data.get("dieta", [])
-
     print(f"🧒 Našiel som {len(deti)} detí.")
     return deti
 
 
-def delete_dieta(guid):
-    """Vymaže dieťa podľa GUID."""
-    url = f"{HOST}/api/vymazDietata"
+def delete_dieta(login, guid, show_data=False):
     payload = {"guid": guid}
 
-    resp = requests.post(url, json=payload, headers=HEADERS)
+    resp = send_post(login, CTX, "/api/vymazDietata", payload, show_data)
 
     if resp.status_code != 200:
         print(f"❌ Chyba pri mazaní dieťaťa {guid}:")
@@ -107,28 +124,42 @@ def delete_dieta(guid):
 
 
 # ----------------------------------------------------------
-#  MAIN – PRIHLÁŠKY → DETI
+#  MAIN
 # ----------------------------------------------------------
-
 if __name__ == "__main__":
-    print("\n🧼 Spúšťam čistenie prihlášok a detí...\n")
+    SHOW = "--show-data" in sys.argv
 
-    # 1) Vymazanie prihlášok
-    prihlasky = get_prihlasky()
+    print("\n=======================================")
+    print(" 🧼 CLEANUP TOOL — DELETE ALL DATA")
+    print(" Prihlášky + Deti podľa prihlásenej osoby")
+    print("=======================================\n")
+
+    # LOGIN
+    login = saml_login()
+    print("✔️ Login OK")
+    print("Subjekt GUID:", login.subj_guid)
+    print("Prihl. osoba GUID:", login.logged_guid)
+
+    print("\n➡️ Začínam čistenie prihlášok...\n")
+
+    # 1) Vymaž prihlášky
+    prihlasky = get_prihlasky(login, SHOW)
 
     for p in prihlasky:
-        delete_prihlaska(p["prihlaskaGUID"])
+        delete_prihlaska(login, p.get("prihlaskaGUID"), SHOW)
 
-    print("⏳ Čakám 1 sekundu, kým sa zmeny prejavia...")
+    print("\n⏳ Čakám 1 sekundu na propagáciu zmien...")
     time.sleep(1)
 
-    # 2) Vymazanie detí
-    deti = get_deti()
+    print("\n➡️ Začínam čistenie detí...\n")
+
+    # 2) Vymaž deti
+    deti = get_deti(login, SHOW)
 
     for d in deti:
         if not d.get("existujeNezrusenaPrihlaska", False):
-            delete_dieta(d["guid"])
+            delete_dieta(login, d.get("guid"), SHOW)
         else:
-            print(f"⚠️ Dieťa {d['guid']} nemožno vymazať – má aktívnu prihlášku.")
+            print(f"⚠️ Dieťa {d.get('guid')} nemožno vymazať – má aktívnu prihlášku.")
 
-    print("\n✨ Hotovo – všetky prihlášky aj deti sú vymazané.\n")
+    print("\n✨ Hotovo — všetky dáta boli vymazané.\n")

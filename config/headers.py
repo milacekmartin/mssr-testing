@@ -42,3 +42,11 @@ EXTENDED_HEADERS = {
     "x-correlation-id": "",  # bude nastavené dynamicky
     "x-token-descriptor": IAM_TOKEN,  # LOWERCASE!
 }
+
+VYHLEDAVACIE_HEADERS = {
+    "x-requested-with": "XMLHttpRequest",
+    "origin": HOST,
+    "accept": "application/json, text/plain, */*",
+    "content-type": "application/json;charset=UTF-8",
+    "referer": ""  # dynamicky sa nastaví cez http.set_referer()
+}

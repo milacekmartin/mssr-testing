@@ -8,8 +8,8 @@ import sys, os, html
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.settings import HOST
 
-USERNAME = ""
-PASSWORD = ""
+USERNAME = "martin.milacek@professional-test-automation.com"
+PASSWORD = "Initial0!"
 
 ACS_URL = f"{HOST}/assertionconsumerservice"
 

@@ -1,168 +1,210 @@
 # scenarios/zs_prihlaska.py
 # ===========================
-#
 # Kompletný ZŠ scenár (1–31 krokov)
-# so safe_extract + dynamickým REFEREROM pre vyhľadávanie.
+# Používa SAML login cez http.auth
 
 import uuid
 
 from config.random_names import generate_random_name
-from config.settings import (
-    HOST,
-    SUBJEKT_GUID,
-    PRIHLASENA_OSOBA_GUID,
-    SKOLSKY_ROK_KOD_2026,
-)
+from config.env import HOST
 
-from payloads.dieta import create_dieta_payload
-from payloads.prihlaska import (
+# payload builders
+from tests.child.payloads.child import build_base_child_payload
+from tests.prihlaska.payloads.koncept import (
     koncept_krok_1, koncept_krok_2, koncept_krok_3,
     koncept_krok_4, koncept_krok_5
 )
-
-from payloads.oblubene import payload_oblubene_zs, payload_add_favorite_school
-from payloads.vyhladavanie import (
-    search_address_payload, search_base_payload,
-    search_slovak_payload, search_statne_payload,
-    search_typy_payload
+from tests.vyhladavanie.payloads.search import (
+    build_search_payload
 )
+from payloads.oblubene import payload_oblubene_zs, payload_add_favorite_school
 
 
-def safe_extract(resp, json_obj, path, label):
+# ---------------------------------------------------------------------
+# SAFE EXTRACT (opravené so správnym loggingom)
+# ---------------------------------------------------------------------
+from locust import events  # ✔ správny import
+
+def safe_extract(resp, label, path):
     """
-    Extrakcia hodnoty z JSON podľa path (list).
-    VŽDY explicitne vyhodnotí response.
+    Extrahuje hodnotu a ak neexistuje → vytvorí LOCUST FAILURE,
+    ktoré sa ZOBRAZÍ v UI v záložke Failures.
     """
+
     try:
-        obj = json_obj
+        js = resp.json()
+        obj = js
         for key in path:
             obj = obj[key]
 
-        if obj is None or obj == "":
-            raise KeyError(f"{label} empty or null")
+        if not obj:
+            raise KeyError(f"{label} empty")
 
-        # 🔥 SUCCESS
         resp.success()
         return obj
 
     except Exception as e:
-        print(f"\n❌ FATAL – nepodarilo sa extrahovať {label}!")
-        print(f"   Dôvod: {e}")
-        print(f"   Response body: {json_obj}\n")
+        preview = resp.text[:400]
+        detail = f"{label} missing: {e} | response: {preview}"
 
-        # 🔥 DETAILNÁ SPRÁVA
-        error_detail = f"Missing {label}: {e}"
-        if isinstance(json_obj, dict):
-            kod = json_obj.get('kodSpracovania', 'N/A')
-            popis = json_obj.get('popisSpracovania', 'N/A')
-            error_detail = f"Missing {label} | Kod: {kod} | Popis: {popis}"
-        
-        # 🔥 FAILURE
-        resp.failure(error_detail)
+        print(f"\n❌ {detail}\n")
+
+        # Označ pôvodný HTTP request ako FAIL
+        resp.failure(detail)
+
+        # 🔥 ZAREGISTRUJ FAILURE DO LOCUST UI
+        events.request.fire(
+            request_type="SCENARIO",
+            name=f"CHYBA – {label}",
+            response_time=0,
+            response_length=len(preview),
+            exception=Exception(detail)
+        )
+
         return None
 
 
-def run_zs_scenario(user, http):
-    http.set_context("ZS-FLOW")
-    print("🎓 Spúšťam kompletný ZŠ scenár (1–31)")
 
-    # -----------------------------------
-    # KROK 0 – meno
-    # -----------------------------------
+
+# ---------------------------------------------------------------------
+# HLAVNÝ ZŠ SCENÁR
+# ---------------------------------------------------------------------
+def run_zs_scenario(user, http):
+    """
+    user → Locust user instance (má wait_time, env, auth, logger, user_id…)
+    http → náš custom HTTP wrapper (má post_scenario / get_scenario)
+    """
+
+    http.set_context("ZS-FLOW")
+    print(f"🎓 Spúšťam ZŠ scenár – user: {user.user_id}")
+
+    # =====================================================================================
+    # KROK 0 – meno dieťaťa
+    # =====================================================================================
     first, last = generate_random_name()
     print(f"🧒 Generujem dieťa: {first} {last}")
 
-    # 1 – Oznámenia
+    subjekt_guid = user.auth.subj_guid
+    prihlasena_osoba_guid = user.auth.logged_guid
+
+    # =====================================================================================
+    # KROK 1 – OZNÁMENIA
+    # =====================================================================================
     http.post_scenario(
         "/api/vratenieZoznamuOznameniPreZZ",
-        {"prihlasenaOsobaGUID": PRIHLASENA_OSOBA_GUID,
-         "precitana": False,
-         "pocetZaznamovNaStranku": 50,
-         "cisloStranky": 1},
+        {
+            "prihlasenaOsobaGUID": prihlasena_osoba_guid,
+            "precitana": False,
+            "pocetZaznamovNaStranku": 50,
+            "cisloStranky": 1,
+        },
         "KROK 1 – Načítanie oznámení"
     )
 
-    # 2 – Zoznam detí
+    # =====================================================================================
+    # KROK 2 – ZOZNAM DETÍ
+    # =====================================================================================
     http.post_scenario(
         "/api/vratenieZoznamuDeti",
-        {"guid": SUBJEKT_GUID, "lenPlatne": True},
+        {"guid": subjekt_guid, "lenPlatne": True},
         "KROK 2 – Zoznam detí"
     )
 
-    # 3 – Vytvorenie dieťaťa
+    # =====================================================================================
+    # KROK 3 – VYTVORENIE DIEŤAŤA
+    # =====================================================================================
+    child_payload = build_base_child_payload(first, last)
+    child_payload["subjektGUID"] = subjekt_guid
+
     resp_create = http.post_scenario(
         "/api/zapisAModifikaciaDietata",
-        create_dieta_payload(first, last),
+        child_payload,
         "KROK 3 – Pridanie dieťaťa"
     )
 
-    dieta_guid = safe_extract(resp_create, resp_create.json(), ["dieta", "guid"], "GUID dieťaťa")
+    dieta_guid = safe_extract(resp_create, "GUID dieťaťa", ["dieta", "guid"])
     if dieta_guid is None:
-        print("🛑 STOP – GUID dieťaťa chýba.")
+        print("🛑 STOP – dieťa sa nepodarilo vytvoriť.")
         return
 
-    # 4 – Refresh
+    # =====================================================================================
+    # KROK 4 – REFRESH DETÍ
+    # =====================================================================================
     http.post_scenario(
         "/api/vratenieZoznamuDeti",
-        {"guid": SUBJEKT_GUID, "lenPlatne": True},
+        {"guid": subjekt_guid, "lenPlatne": True},
         "KROK 4 – Refresh detí"
     )
 
-    # 5 – Detail dieťaťa
+    # =====================================================================================
+    # KROK 5 – DETAIL DIEŤAŤA
+    # =====================================================================================
     http.post_scenario(
         "/api/vratenieUdajovDietata",
         {"guid": dieta_guid},
         "KROK 5 – Detail dieťaťa"
     )
 
-    # 6 – Koncept krok 1
+    # =====================================================================================
+    # KROK 6 – KONCEPT KROK 1
+    # =====================================================================================
     resp_k1 = http.post_scenario(
         "/api/zapisAModifikaciaKonceptuPrihlasky",
         koncept_krok_1(dieta_guid),
         "KROK 6 – Koncept krok 1"
     )
 
-    prihlaska_guid = safe_extract(resp_k1, resp_k1.json(), ["prihlaska", "prihlaskaGUID"], "GUID prihlášky")
+    prihlaska_guid = safe_extract(resp_k1, "GUID prihlášky", ["prihlaska", "prihlaskaGUID"])
     if prihlaska_guid is None:
         print("🛑 STOP – GUID prihlášky chýba.")
         return
 
-    # ----------------------------------------------------------
-    # 🔥 DYNAMICKÝ REFERER (pre všetky vyhľadávania)
-    # ----------------------------------------------------------
+    # =====================================================================================
+    # DYNAMICKÝ REFERER pre všetky vyhľadávania
+    # =====================================================================================
     dyn_ref = f"{HOST}/Prihlaska?typSaSZ=ZS&guid={prihlaska_guid}"
     http.set_referer(dyn_ref)
 
-    # 7 – Koncept krok 2
+    # =====================================================================================
+    # KROK 7 – KONCEPT 2
+    # =====================================================================================
     http.post_scenario(
         "/api/zapisAModifikaciaKonceptuPrihlasky",
         koncept_krok_2(dieta_guid, prihlaska_guid),
         "KROK 7 – Koncept krok 2"
     )
 
-    # 8 – Obľúbené ZŠ
+    # =====================================================================================
+    # KROK 8 – OBĽÚBENÉ ZŠ
+    # =====================================================================================
     http.post_scenario(
         "/api/vratenieEDUIDOblubenychSaSZ",
-        payload_oblubene_zs(),
+        payload_oblubene_zs(prihlasena_osoba_guid),
         "KROK 8 – Obľúbené ZŠ"
     )
 
-    # 9 – Filtrovanie ZŠ (EXTENDED HEADERS)
+    # =====================================================================================
+    # KROK 9 – FILTROVANIE ZŠ (EXTENDED)
+    # =====================================================================================
     http.post_extended_scenario(
         "/api/vrateniePoloziekFiltrov",
-        {"skolskyRokKod": SKOLSKY_ROK_KOD_2026, "ms": False, "zs": True},
+        {"skolskyRokKod": "2026/2027", "ms": False, "zs": True},
         "KROK 9 – Filtrovanie ZŠ"
     )
 
-    # 10 – Vyhľadávanie adresy (GET)
+    # =====================================================================================
+    # KROK 10 – VYHĽADÁVANIE ADRESY
+    # =====================================================================================
     http.get_scenario(
         "/api/search",
-        search_address_payload(),
+        {"text": "Bratislava 2, Bratislava", "_": "123123123"},
         "KROK 10 – Vyhľadávanie adresy"
     )
 
-    # 11–22 – VYHĽADÁVANIA (EXTENDED)
-    print("🔍 Spúšťam vyhľadávacie kroky (11–22)...")
+    # =====================================================================================
+    # KROKY 11–22 – VYHĽADÁVANIA
+    # =====================================================================================
+    print("🔍 Spúšťam vyhľadávacie kroky 11–22...")
 
     http.post_extended_scenario("/api/vyhladanieMSaZS", search_base_payload(20), "KROK 11 – base 20")
     http.post_extended_scenario("/api/vyhladanieMSaZS", search_base_payload(100000), "KROK 12 – base 100k")
@@ -170,54 +212,91 @@ def run_zs_scenario(user, http):
     http.post_extended_scenario("/api/vyhladanieMSaZS", search_slovak_payload(20), "KROK 13 – slovensky 20")
     http.post_extended_scenario("/api/vyhladanieMSaZS", search_slovak_payload(100000), "KROK 14 – slovensky 100k")
 
-    http.post_extended_scenario("/api/vyhladanieMSaZS", search_slovak_payload(20), "KROK 15 – slovensky 20 opak")
-    http.post_extended_scenario("/api/vyhladanieMSaZS", search_slovak_payload(100000), "KROK 16 – slovensky 100k opak")
-
     http.post_extended_scenario("/api/vyhladanieMSaZS", search_statne_payload(20), "KROK 17 – štátne 20")
     http.post_extended_scenario("/api/vyhladanieMSaZS", search_statne_payload(100000), "KROK 18 – štátne 100k")
 
     http.post_extended_scenario("/api/vyhladanieMSaZS", search_typy_payload(20), "KROK 19 – typy 20")
     http.post_extended_scenario("/api/vyhladanieMSaZS", search_typy_payload(100000), "KROK 20 – typy 100k")
 
-    http.post_extended_scenario("/api/vyhladanieMSaZS", search_typy_payload(20), "KROK 21 – typy 20 opak")
-    http.post_extended_scenario("/api/vyhladanieMSaZS", search_typy_payload(100000), "KROK 22 – typy 100k opak")
+    # =====================================================================================
+    # KROK 23 – OBĽÚBENÉ
+    # =====================================================================================
+    http.post_scenario(
+        "/api/vratenieEDUIDOblubenychSaSZ",
+        payload_oblubene_zs(prihlasena_osoba_guid),
+        "KROK 23 – Obľúbené ZŠ"
+    )
 
-    # 23 – obľúbené
-    http.post_scenario("/api/vratenieEDUIDOblubenychSaSZ", payload_oblubene_zs(), "KROK 23 – Finálne obľúbené ZŠ")
+    # =====================================================================================
+    # KROK 24 – PRIDANIE OBĽÚBENEJ ŠKOLY
+    # =====================================================================================
+    http.post_scenario(
+        "/api/zapisOblubenychSaSZ",
+        payload_add_favorite_school(prihlasena_osoba_guid),
+        "KROK 24 – Pridanie obľúbenej školy"
+    )
 
-    # 24 – pridanie obľúbenej školy
-    http.post_scenario("/api/zapisOblubenychSaSZ",
-                       payload_add_favorite_school(),
-                       "KROK 24 – Pridanie obľúbenej školy")
+    # =====================================================================================
+    # KROK 25 – REFRESH OBĽÚBENÝCH
+    # =====================================================================================
+    http.post_scenario(
+        "/api/vratenieEDUIDOblubenychSaSZ",
+        payload_oblubene_zs(prihlasena_osoba_guid),
+        "KROK 25 – Refresh obľúbených"
+    )
 
-    # 25 – refresh obľúbených
-    http.post_scenario("/api/vratenieEDUIDOblubenychSaSZ",
-                       payload_oblubene_zs(),
-                       "KROK 25 – Overenie obľúbených")
+    # =====================================================================================
+    # KROK 26 – KONCEPT KROK 3 (VÝBER ŠKOLY)
+    # =====================================================================================
+    http.post_scenario(
+        "/api/zapisAModifikaciaKonceptuPrihlasky",
+        koncept_krok_3(dieta_guid, prihlaska_guid),
+        "KROK 26 – Koncept krok 3"
+    )
 
-    # 26–31 – dokončenie konceptu
-    http.post_scenario("/api/zapisAModifikaciaKonceptuPrihlasky",
-                       koncept_krok_3(dieta_guid, prihlaska_guid),
-                       "KROK 26 – Koncept krok 3")
+    # =====================================================================================
+    # KROK 27 – VYBRANÉ ŠKOLY
+    # =====================================================================================
+    http.post_scenario(
+        "/api/vratenieVybranychSaSZ",
+        {"prihlaskaGUID": prihlaska_guid},
+        "KROK 27 – Vybrané školy"
+    )
 
-    http.post_scenario("/api/vratenieVybranychSaSZ",
-                       {"prihlaskaGUID": prihlaska_guid},
-                       "KROK 27 – Vybrané školy")
+    # =====================================================================================
+    # KROK 28 – KONCEPT KROK 4
+    # =====================================================================================
+    http.post_scenario(
+        "/api/zapisAModifikaciaKonceptuPrihlasky",
+        koncept_krok_4(dieta_guid, prihlaska_guid),
+        "KROK 28 – Koncept krok 4"
+    )
 
-    http.post_scenario("/api/zapisAModifikaciaKonceptuPrihlasky",
-                       koncept_krok_4(dieta_guid, prihlaska_guid),
-                       "KROK 28 – Koncept krok 4")
+    # =====================================================================================
+    # KROK 29 – KONCEPT KROK 5
+    # =====================================================================================
+    http.post_scenario(
+        "/api/zapisAModifikaciaKonceptuPrihlasky",
+        koncept_krok_5(dieta_guid, prihlaska_guid),
+        "KROK 29 – Koncept krok 5"
+    )
 
-    http.post_scenario("/api/zapisAModifikaciaKonceptuPrihlasky",
-                       koncept_krok_5(dieta_guid, prihlaska_guid),
-                       "KROK 29 – Koncept krok 5")
+    # =====================================================================================
+    # KROK 30 – DETAIL KONCEPTU
+    # =====================================================================================
+    http.post_scenario(
+        "/api/vratenieKonceptuPrihlasky",
+        {"prihlaskaGUID": prihlaska_guid},
+        "KROK 30 – Kontrola konceptu"
+    )
 
-    http.post_scenario("/api/vratenieKonceptuPrihlasky",
-                       {"prihlaskaGUID": prihlaska_guid},
-                       "KROK 30 – Kontrola konceptu")
+    # =====================================================================================
+    # KROK 31 – FINÁLNA KONTROLA KONCEPTU
+    # =====================================================================================
+    http.post_scenario(
+        "/api/vratenieKonceptuPrihlasky",
+        {"prihlaskaGUID": prihlaska_guid},
+        "KROK 31 – Finálna kontrola"
+    )
 
-    http.post_scenario("/api/vratenieKonceptuPrihlasky",
-                       {"prihlaskaGUID": prihlaska_guid},
-                       "KROK 31 – Finálna kontrola konceptu")
-
-    print("🏁 Scenár ZŠ kompletne dokončený (1–31).")
+    print(f"🏁 User {user.user_id}: ZŠ scenár dokončený.")

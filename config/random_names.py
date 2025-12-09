@@ -1,6 +1,5 @@
 import random
 
-# Bez diakritiky pre testovanie
 SLOVAK_FIRST_NAMES = [
     "Adam", "Alex", "Daniel", "David", "Jakub", 
     "Jan", "Lukas", "Martin", "Matej", "Michal",
@@ -16,15 +15,14 @@ SLOVAK_LAST_NAMES = [
 ]
 
 def generate_random_name():
-    """
-    Generuje náhodné slovenské meno + priezvisko bez diakritiky
-    s jedinečným sufixom.
-    """
     first = random.choice(SLOVAK_FIRST_NAMES)
     last = random.choice(SLOVAK_LAST_NAMES)
     
-    # Jedinečný 4-znakový suffix
     import string
-    suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
     
-    return f"{first}-{suffix}", f"{last}-{suffix}"
+    random_word_length = random.randint(4, 8)
+    first_letter = random.choice(string.ascii_uppercase)
+    remaining_letters = ''.join(random.choices(string.ascii_lowercase, k=random_word_length-1))
+    random_word = first_letter + remaining_letters
+    
+    return f"{first}", f"{last} {random_word}"
