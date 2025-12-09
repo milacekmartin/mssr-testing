@@ -1,45 +1,35 @@
-import sys, datetime, html
+import datetime
 
-def generate_html_report(title, log_text, output_file):
+def generate_index(output="pages/index.html"):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    html_content = f"""
+    html = f"""
 <html>
 <head>
     <meta charset="utf-8" />
-    <title>{title}</title>
+    <title>Test Reports</title>
     <style>
-        body {{ font-family: Arial, sans-serif; padding: 20px; }}
-        h1 {{ color: #2c3e50; }}
-        pre {{
-            background: #f4f4f4;
-            padding: 15px;
-            border-radius: 5px;
-            white-space: pre-wrap;
-        }}
-        .pass {{ color: green; font-weight: bold; }}
-        .fail {{ color: red; font-weight: bold; }}
+        body {{ font-family: Arial; padding: 20px; }}
+        h1 {{ color: #1d3557; }}
+        ul {{ line-height: 1.8; }}
+        a {{ font-size: 18px; }}
     </style>
 </head>
 <body>
-    <h1>{title}</h1>
-    <p><strong>Generated:</strong> {now}</p>
-    <h2>Raw Output</h2>
-    <pre>{html.escape(log_text)}</pre>
+    <h1>📊 Test Reports</h1>
+    <p>Generated: {now}</p>
+
+    <h2>Child Tests</h2>
+    <ul>
+        <li><a href="child/create_tests_report.html">Child Create Tests Report</a></li>
+        <li><a href="child/full_flow_report.html">Child Full Flow Report</a></li>
+    </ul>
 </body>
 </html>
 """
-
-    with open(output_file, "w", encoding="utf-8") as f:
-        f.write(html_content)
+    with open(output, "w", encoding="utf-8") as f:
+        f.write(html)
 
 
 if __name__ == "__main__":
-    title = sys.argv[1]
-    log_file = sys.argv[2]
-    output = sys.argv[3]
-
-    with open(log_file, "r", encoding="utf-8") as f:
-        log_text = f.read()
-
-    generate_html_report(title, log_text, output)
+    generate_index()

@@ -42,6 +42,8 @@ jobs:
           mkdir -p pages/child
           python3 utils/generate_html_report.py "Child Tests - Create" create_tests.log pages/child/create_tests_report.html
           python3 utils/generate_html_report.py "Child Tests - Full Flow" full_flow.log pages/child/full_flow_report.html
+          python3 utils/generate_index.py       # 🔥 vygeneruje pages/index.html
+
 
       # -----------------------------
       # UPLOAD TO GITHUB PAGES
@@ -57,9 +59,7 @@ jobs:
     permissions:
       pages: write
       id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    environment: github-pages
 
     steps:
       - name: Deploy to GitHub Pages
