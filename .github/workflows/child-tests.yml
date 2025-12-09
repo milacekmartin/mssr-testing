@@ -9,46 +9,58 @@ jobs:
   child-tests:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+      actions: read   # potrebné na volanie Actions API
+      id-token: write
+
     steps:
-      # --- CHECKOUT REPO ---
       - uses: actions/checkout@v4
 
-      # --- PYTHON ---
       - uses: actions/setup-python@v4
         with:
           python-version: "3.11"
 
-      # --- INSTALL DEPENDENCIES ---
       - name: Install dependencies
         run: |
           pip install --upgrade pip
           pip install requests beautifulsoup4
 
-      # --- RUN CHILD CREATE TESTS ---
       - name: Run create_tests.py
         run: |
-          echo "🚀 Running CHILD create tests..."
           python3 tests/child/create_tests.py --show-data | tee create_tests.log
         continue-on-error: true
 
-      # --- RUN CHILD FULL FLOW ---
       - name: Run full_flow.py
         run: |
-          echo "🚀 Running CHILD full flow..."
           python3 tests/child/full_flow.py --show-data | tee full_flow.log
         continue-on-error: true
 
-      # --- GENERATE HTML REPORTS ---
       - name: Generate HTML reports
         run: |
           python3 utils/generate_html_report.py "Child Tests - Create" create_tests.log create_tests_report.html
           python3 utils/generate_html_report.py "Child Tests - Full Flow" full_flow.log full_flow_report.html
 
-      # --- UPLOAD RESULTS AS ARTIFACTS ---
+      # ---------------------------
+      # UPLOAD ARTIFACT
+      # ---------------------------
       - name: Upload artifacts
+        id: upload_reports
         uses: actions/upload-artifact@v4
         with:
           name: child-tests-report
           path: |
             *.log
             *.html
+
+      # ---------------------------
+      # CREATE DIRECT LINK IN SUMMARY
+      # ---------------------------
+      - name: Add HTML report link to summary
+        run: |
+          ARTIFACT_ID=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts --jq '.artifacts[] | select(.name=="child-tests-report") | .id')
+          ARTIFACT_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/$ARTIFACT_ID"
+          echo "### 🔗 Child Tests Report" >> $GITHUB_STEP_SUMMARY
+          echo "[Klikni sem pre stiahnutie reportu]($ARTIFACT_URL)" >> $GITHUB_STEP_SUMMARY
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

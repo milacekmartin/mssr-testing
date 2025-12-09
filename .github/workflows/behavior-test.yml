@@ -35,7 +35,7 @@ jobs:
             --headless \
             -u 10 \
             -r 10 \
-            -t 5m \
+            -t 1m \
             --csv results \
             --html report.html \
             --only-summary \
