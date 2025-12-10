@@ -1,4 +1,4 @@
-name: Behavior Test Report
+name: Locust Load Test (ZŠ scénár)
 
 on:
   workflow_dispatch:
@@ -13,44 +13,78 @@ permissions:
   id-token: write
 
 jobs:
-  behavior-test:
+  loadtest:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      # --- CHECKOUT REPO ---
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      # --- INSTALL PYTHON ---
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
+      # --- INSTALL DEPENDENCIES ---
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
-          pip install requests beautifulsoup4
+          python3 -m pip install --upgrade pip
+          pip install locust requests beautifulsoup4
 
-      - name: Run behavior tests
+      # ==========================================================
+      # RUN LOCUST LOADTEST (BEHAVIOR TEST)
+      # ==========================================================
+      - name: Run Locust ZŠ scénár
         run: |
-          python3 tests/child/create_tests.py --show-data 2>&1 | tee behavior_tests.log
-        continue-on-error: true
+          python3 -m locust -f locustfile_zs.py \
+            --headless \
+            -u 10 \
+            -r 10 \
+            -t 1m \
+            --csv results \
+            --html report.html \
+            --only-summary \
+            --host https://test-eprihlasky.iedu.sk
+        continue-on-error: true   # 🔥 aj pri FAIL pokračuje workflow
 
-      # Create HTML
-      - name: Generate HTML report
+      # ==========================================================
+      # GENERATE HTML + CSV + INDEX
+      # ==========================================================
+      - name: Prepare HTML for GitHub Pages
         if: ${{ always() }}
         run: |
-          mkdir -p pages/behavior
-          python3 utils/generate_html_report.py "Behavior Test Report" behavior_tests.log pages/behavior/behavior_report.html
+          mkdir -p pages/loadtest
+
+          # Move html report
+          if [ -f report.html ]; then mv report.html pages/loadtest/report.html; fi
+
+          # Move CSV files if exist
+          if [ -f results_stats.csv ]; then mv results_stats.csv pages/loadtest/; fi
+          if [ -f results_requests.csv ]; then mv results_requests.csv pages/loadtest/; fi
+          if [ -f results_failures.csv ]; then mv results_failures.csv pages/loadtest/; fi
+
+          # generate index
           python3 utils/generate_html_report.py index
 
-      - name: Upload Pages Artifact
+          echo "--- Pages folder content ---"
+          ls -R pages
+
+      # ==========================================================
+      # UPLOAD STATIC SITE
+      # ==========================================================
+      - name: Upload GitHub Pages Artifact
         if: ${{ always() }}
         uses: actions/upload-pages-artifact@v3
         with:
           path: pages
 
+  # ==========================================================
+  # DEPLOYMENT JOB
+  # ==========================================================
   deploy-pages:
-    needs: behavior-test
+    needs: loadtest
     runs-on: ubuntu-latest
     permissions:
       pages: write
