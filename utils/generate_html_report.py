@@ -27,7 +27,6 @@ def generate_html_report(title, log_text, output_file):
 </body>
 </html>
 """
-
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
     with open(output_file, "w", encoding="utf-8") as f:
@@ -41,7 +40,7 @@ def generate_index(output_path="pages/index.html"):
 <html>
 <head>
     <meta charset="utf-8" />
-    <title>Test Reports</title>
+    <title>Test Reports Dashboard</title>
     <style>
         body {{ font-family: Arial, sans-serif; padding: 20px; }}
         h1 {{ color: #1d3557; }}
@@ -51,7 +50,12 @@ def generate_index(output_path="pages/index.html"):
 </head>
 <body>
     <h1>📊 Test Reports Dashboard</h1>
-    <p><strong>Generated:</strong> {now}</p>
+    <p>Generated: {now}</p>
+
+    <h2>Behavior Tests</h2>
+    <ul>
+        <li><a href="behavior/behavior_report.html">Behavior Tests Report</a></li>
+    </ul>
 
     <h2>Child Tests</h2>
     <ul>
@@ -59,10 +63,10 @@ def generate_index(output_path="pages/index.html"):
         <li><a href="child/full_flow_report.html">Full Flow Report</a></li>
     </ul>
 
-    <h2>Load Tests (Locust)</h2>
+    <h2>Load Tests</h2>
     <ul>
         <li><a href="loadtest/report.html">Locust HTML Report</a></li>
-        <li><a href="loadtest/results_stats.csv">Statistics CSV</a></li>
+        <li><a href="loadtest/results_stats.csv">Stats CSV</a></li>
         <li><a href="loadtest/results_requests.csv">Requests CSV</a></li>
         <li><a href="loadtest/results_failures.csv">Failures CSV</a></li>
     </ul>
@@ -70,9 +74,21 @@ def generate_index(output_path="pages/index.html"):
 </body>
 </html>
 """
-
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(html_index)
 
+
+if __name__ == "__main__":
+    if sys.argv[1] == "index":
+        generate_index()
+    else:
+        title = sys.argv[1]
+        log_file = sys.argv[2]
+        output = sys.argv[3]
+
+        with open(log_file, "r", encoding="utf-8") as f:
+            log_text = f.read()
+
+        generate_html_report(title, log_text, output)
