@@ -52,6 +52,12 @@ def generate_index(output_path="pages/index.html"):
     <h1>📊 Test Reports Dashboard</h1>
     <p>Generated: {now}</p>
 
+    <h2>Child Tests</h2>
+    <ul>
+        <li><a href="child/create_tests_report.html">Create Tests Report</a></li>
+        <li><a href="child/full_flow_report.html">Full Flow Report</a></li>
+    </ul>
+
     <h2>Load Tests</h2>
     <ul>
         <li><a href="loadtest/report.html">Locust HTML Report</a></li>
@@ -62,8 +68,21 @@ def generate_index(output_path="pages/index.html"):
 </body>
 </html>
 """
-
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(html_index)
 
+
+if __name__ == "__main__":
+    if sys.argv[1] == "index":
+        generate_index()
+    else:
+        title = sys.argv[1]
+        log_file = sys.argv[2]
+        output = sys.argv[3]
+
+        with open(log_file, "r", encoding="utf-8") as f:
+            log_text = f.read()
+
+        generate_html_report(title, log_text, output)
