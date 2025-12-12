@@ -7,18 +7,29 @@ on:
         description: "Number of concurrent users"
         required: true
         default: "10"
+
       rampup:
         description: "User spawn rate (users per second)"
         required: true
         default: "5"
+
       duration:
         description: "Test duration (e.g. 1m, 5m, 30s)"
         required: true
         default: "1m"
+
       host:
         description: "Target host (base URL)"
         required: true
         default: "https://test-eprihlasky.iedu.sk"
+
+      username:
+        description: "Login username (optional – overrides GitHub Secret)"
+        required: false
+
+      password:
+        description: "Login password (optional – overrides GitHub Secret)"
+        required: false
 
   push:
     branches:
@@ -58,7 +69,7 @@ jobs:
           pip install locust requests beautifulsoup4
 
       # ==========================================================
-      # RESOLVE INPUTS (manual vs push defaults)
+      # RESOLVE INPUTS
       # ==========================================================
       - name: Resolve inputs
         id: vars
@@ -79,10 +90,44 @@ jobs:
           echo "▶ HOST=$HOST"
 
       # ==========================================================
+      # RESOLVE CREDENTIALS (INPUTS > SECRETS)
+      # ==========================================================
+      - name: Resolve credentials
+        id: creds
+        run: |
+          USERNAME="${{ github.event.inputs.username }}"
+          PASSWORD="${{ github.event.inputs.password }}"
+
+          if [ -z "$USERNAME" ]; then
+            USERNAME="${{ secrets.LOGIN_USERNAME }}"
+            SOURCE="secrets"
+          else
+            SOURCE="manual-input"
+          fi
+
+          if [ -z "$PASSWORD" ]; then
+            PASSWORD="${{ secrets.LOGIN_PASSWORD }}"
+          fi
+
+          if [ -z "$USERNAME" ] || [ -z "$PASSWORD" ]; then
+            echo "❌ Credentials missing (inputs or secrets)"
+            exit 1
+          fi
+
+          echo "source=$SOURCE" >> $GITHUB_OUTPUT
+          echo "LOGIN_USERNAME=$USERNAME" >> $GITHUB_ENV
+          echo "LOGIN_PASSWORD=$PASSWORD" >> $GITHUB_ENV
+
+          echo "✔ Credentials resolved from: $SOURCE"
+
+      # ==========================================================
       # RUN LOCUST LOAD TEST
       # ==========================================================
       - name: Run Locust ZŠ scénár
         continue-on-error: true
+        env:
+          LOGIN_USERNAME: ${{ env.LOGIN_USERNAME }}
+          LOGIN_PASSWORD: ${{ env.LOGIN_PASSWORD }}
         run: |
           python3 -m locust \
             -f tests/prihlaska/full_flow_locust.py \
@@ -117,7 +162,6 @@ jobs:
             mv results_failures.csv pages/loadtest/
           fi
 
-          # optional index generator (ak existuje)
           if [ -f utils/generate_html_report.py ]; then
             python3 utils/generate_html_report.py index
           fi
