@@ -2,6 +2,13 @@ name: Prihlaska Tests
 
 on:
   workflow_dispatch:
+    inputs:
+      username:
+        description: "Login username (optional – overrides secret)"
+        required: false
+      password:
+        description: "Login password (optional – overrides secret)"
+        required: false
   push:
     branches: [ main, master ]
 
@@ -10,18 +17,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
           pip install --upgrade pip
           pip install requests beautifulsoup4
+
+      - name: Resolve credentials
+        run: |
+          USERNAME="${{ github.event.inputs.username || secrets.LOGIN_USERNAME }}"
+          PASSWORD="${{ github.event.inputs.password || secrets.LOGIN_PASSWORD }}"
+
+          if [ -z "$USERNAME" ] || [ -z "$PASSWORD" ]; then
+            echo "❌ Missing credentials"
+            exit 1
+          fi
+
+          echo "LOGIN_USERNAME=$USERNAME" >> $GITHUB_ENV
+          echo "LOGIN_PASSWORD=$PASSWORD" >> $GITHUB_ENV
 
       - name: Run full prihlaska flow
         run: |
@@ -36,4 +53,3 @@ jobs:
             **/*.log
             **/*.json
             **/*.txt
-          retention-days: 14

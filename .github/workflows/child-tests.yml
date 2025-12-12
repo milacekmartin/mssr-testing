@@ -1,23 +1,28 @@
-# yaml-language-server: disable
-
 name: Child Tests
 
 on:
   workflow_dispatch:
+    inputs:
+      username:
+        description: "Login username (optional – overrides secret)"
+        required: false
+      password:
+        description: "Login password (optional – overrides secret)"
+        required: false
   push:
     branches: [ main, master ]
 
 permissions:
   contents: read
-  pages: write       # REQUIRED
-  id-token: write    # REQUIRED
+  pages: write
+  id-token: write
 
 jobs:
   child-tests:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v4
         with:
           python-version: "3.11"
@@ -26,6 +31,23 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install requests beautifulsoup4
+
+      # ----------------------------------------------------------
+      # RESOLVE CREDENTIALS (INPUTS > SECRETS)
+      # ----------------------------------------------------------
+      - name: Resolve credentials
+        run: |
+          USERNAME="${{ github.event.inputs.username || secrets.LOGIN_USERNAME }}"
+          PASSWORD="${{ github.event.inputs.password || secrets.LOGIN_PASSWORD }}"
+
+          if [ -z "$USERNAME" ] || [ -z "$PASSWORD" ]; then
+            echo "❌ Missing credentials"
+            exit 1
+          fi
+
+          echo "LOGIN_USERNAME=$USERNAME" >> $GITHUB_ENV
+          echo "LOGIN_PASSWORD=$PASSWORD" >> $GITHUB_ENV
+          echo "✔ Credentials resolved"
 
       - name: Run create_tests.py
         run: |
@@ -42,11 +64,8 @@ jobs:
           mkdir -p pages/child
           python3 utils/generate_html_report.py "Child Tests - Create" create_tests.log pages/child/create_tests_report.html
           python3 utils/generate_html_report.py "Child Tests - Full Flow" full_flow.log pages/child/full_flow_report.html
-          python3 utils/generate_html_report.py index   # 🔥 TERAZ TO FUNGUJE
+          python3 utils/generate_html_report.py index
 
-      # -----------------------------
-      # UPLOAD TO GITHUB PAGES
-      # -----------------------------
       - name: Upload Pages Artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -59,9 +78,5 @@ jobs:
       pages: write
       id-token: write
     environment: github-pages
-
     steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-
+      - uses: actions/deploy-pages@v4
