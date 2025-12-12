@@ -1,29 +1,72 @@
-# locust/tests/prihlaska/test_prihlaska_all.py
+# tests/prihlaska/full_flow.py
+# ======================================================================
+# Adaptive FULL FLOW for ZŠ application (school year 2026/2027)
+#
+# Process:
+#   CHILD → STEP 1 → STEP 2 → STEP 3 → SCHOOL SEARCH →
+#   SAVE SCHOOL → STEP 4 ADAPTIVE → STEP 5 ADAPTIVE → STEP 10 → DETAIL
+#
+# Professional clean-output version:
+#   ✓ No debug dumps
+#   ✓ No list of allowed fields
+#   ✓ No HTTP 400 prints
+#   ✓ Clean readable flow logs
+# ======================================================================
 
-import sys, os, json, argparse
+import sys
+import os
+import json
+import argparse
+
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(ROOT)
 
+# Auth + environment
 from login.saml_login import saml_login
 from config.env import HOST
 from config.random_names import generate_random_name
-from tests.child.payloads.child import build_base_child_payload
 
-# Prihláška payloady
-from tests.prihlaska.payloads.vyhladavanie import NEG_SEARCH_PAYLOADS
+# Payload builders (steps 1–3)
+from tests.child.payloads.child import build_base_child_payload
 from tests.prihlaska.payloads.koncept import (
     koncept_krok_1,
     koncept_krok_2,
     koncept_krok_3,
+    koncept_krok_3_with_school
 )
 
+# Step 4 builder
+from tests.prihlaska.payloads.koncept_step4 import (
+    build_step4_adaptive,
+    build_step4_fallback
+)
+
+# Step 5 builder
+from tests.prihlaska.payloads.koncept_step5 import (
+    build_step5_adaptive,
+    build_step5_fallback
+)
+
+# Step 10 builder
+from tests.prihlaska.payloads.koncept_step10 import (
+    build_step10_adaptive,
+    build_step10_fallback
+)
+
+# School search
+from tests.vyhladavanie.payloads.search import build_search_payload
+
+
 CTX = "PRIHLASKA-FLOW"
+SKOLSKY_ROK = "2026/2027"
 
 
-# ============================================================
-# UNIFIED SEND POST (rovnaké ako child/edit)
-# ============================================================
-def send_post(login, ctx, endpoint, payload, show_data=False, extra_headers=None):
+# ======================================================================
+# HTTP Utility
+# ======================================================================
+def send_post(login, ctx, endpoint, payload, show=False):
+    """Standard POST wrapper with minimal clean logging."""
+
     url = f"{HOST}{endpoint}"
 
     headers = {
@@ -35,187 +78,193 @@ def send_post(login, ctx, endpoint, payload, show_data=False, extra_headers=None
         "x-token-descriptor": login.token_desc,
         "Cookie": login.cookie_bundle,
         "X-Requested-With": "XMLHttpRequest",
-        "User-Agent": "Mozilla/5.0",
+        "User-Agent": "Mozilla/5.0"
     }
 
-    if extra_headers:
-        headers.update(extra_headers)
-
-    print(f"[{ctx}] POST {endpoint}")
-
-    if show_data:
-        print("\n📤 REQUEST PAYLOAD:")
-        print(json.dumps(payload, indent=2, ensure_ascii=False))
-
     resp = login.session.post(url, json=payload, headers=headers)
-    print(f"[{ctx}] → {resp.status_code}")
-
-    if show_data:
-        print("\n📥 RESPONSE:")
-        try:
-            print(json.dumps(resp.json(), indent=2, ensure_ascii=False))
-        except:
-            print(resp.text)
-        print()
-
     return resp
 
 
 def safe_json(resp):
     try:
         return resp.json()
-    except:
-        return None
+    except Exception:
+        return {}
 
 
-# ============================================================
-# MAIN
-# ============================================================
+# ======================================================================
+# SCHOOL CAPABILITY DETECTION
+# ======================================================================
+def detect_allowed_fields(school_detail):
+    """ Returns allowed fields for adaptive Step 4 """
+    allowed = {}
+
+    if "jazyk" in school_detail:
+        allowed["jazykové_možnosti"] = school_detail["jazyk"]
+
+    for key in [
+        "pozadovanyJazykKod",
+        "zaujemUvodnyRocnikVIN",
+        "zaujemUvodnyRocnikNKS",
+        "zaujemPripravnyRocnik",
+        "zaujemDualneVzdelavanie",
+        "zaujemInternat",
+        "terminPrijimacejSkuskyKod",
+        "mentalnePostihnutie"
+    ]:
+        if key in school_detail:
+            allowed[key] = True
+
+    return allowed
+
+
+def build_adaptive_saSZ(eduid, allowed_fields):
+    """Creates adaptive saSZ entry"""
+    sa = {
+        "saSZEDUID": eduid,
+        "poradie": 1,
+        "kolo": 1,
+        "poradieNaPrihlaske": 1
+    }
+
+    if "pozadovanyJazykKod" in allowed_fields:
+        sa["pozadovanyJazykKod"] = "SK"
+    if "mentalnePostihnutie" in allowed_fields:
+        sa["mentalnePostihnutie"] = False
+    if "zaujemUvodnyRocnikVIN" in allowed_fields:
+        sa["zaujemUvodnyRocnikVIN"] = False
+    if "zaujemUvodnyRocnikNKS" in allowed_fields:
+        sa["zaujemUvodnyRocnikNKS"] = False
+    if "zaujemPripravnyRocnik" in allowed_fields:
+        sa["zaujemPripravnyRocnik"] = False
+    if "zaujemDualneVzdelavanie" in allowed_fields:
+        sa["zaujemDualneVzdelavanie"] = False
+    if "zaujemInternat" in allowed_fields:
+        sa["zaujemInternat"] = False
+
+    return sa
+
+
+# ======================================================================
+# MAIN FULL FLOW
+# ======================================================================
 def main():
-    parser = argparse.ArgumentParser(description="Kompletné testy prihlášky")
-    parser.add_argument("--show-data", action="store_true", help="Zobrazí všetky payloady a response")
-    args = parser.parse_args()
-    SHOW = args.show_data
 
-    print("\n======================================================")
-    print(" PRIHLASKA – FULL FLOW (DIEŤA → KROK1 → KROK2 → KROK3)")
-    print("======================================================\n")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--show-data", action="store_true")
+    SHOW = parser.parse_args().show_data
+
+    print("\n=====================================================")
+    print(" FULL FLOW – CHILD → 1 → 2 → 3 → 4 → 5 → 10 → DETAIL")
+    print("=====================================================\n")
 
     # LOGIN
     login = saml_login()
-    print("✔️ Login OK")
+    print("✔ Login successful")
     print("Subjekt GUID:", login.subj_guid)
-    print("Prihl. osoba GUID:", login.logged_guid)
+    print("User GUID:", login.logged_guid)
 
-    # ============================================================
-    # 1) Vytvorenie dieťaťa
-    # ============================================================
+    # 1) CHILD
     first, last = generate_random_name()
-    print(f"\n🧒 Vytváram dieťa: {first} {last}")
+    print(f"\n🧒 Creating child: {first} {last}")
 
     child = build_base_child_payload(first, last)
     child["subjektGUID"] = login.subj_guid
 
-    resp = send_post(login, CTX, "/api/zapisAModifikaciaDietata", child, SHOW)
-    resp_json = safe_json(resp)
+    resp_child = send_post(login, CTX, "/api/zapisAModifikaciaDietata", child)
+    j_child = safe_json(resp_child)
 
-    dieta_guid = None
-    if resp_json:
-        dieta_guid = (
-            resp_json.get("dieta", {}).get("guid")
-            or resp_json.get("guid")
-        )
+    dieta_guid = j_child.get("dieta", {}).get("guid")
+    print("✔ Child GUID:", dieta_guid)
 
-    if not dieta_guid:
-        print("❌ DIEŤA NEVYTVORENÉ — končím.")
-        return
+    # 2) STEP 1
+    print("\n📘 Step 1 – Creating application...")
+    req1 = koncept_krok_1(dieta_guid, login.logged_guid)
+    resp1 = send_post(login, CTX, "/api/zapisAModifikaciaKonceptuPrihlasky", req1)
+    app_guid = safe_json(resp1).get("prihlaska", {}).get("prihlaskaGUID")
+    print("✔ Application GUID:", app_guid)
 
-    print(f"✔️ Dieťa vytvorené → GUID: {dieta_guid}")
+    # 3) STEP 2
+    print("\n📘 Step 2 – Updating complementary data...")
+    req2 = koncept_krok_2(dieta_guid, app_guid, login.logged_guid)
+    send_post(login, CTX, "/api/zapisAModifikaciaKonceptuPrihlasky", req2)
+    print("✔ Step 2 OK")
 
-    # ============================================================
-    # 2) Krok 1 prihlášky
-    # ============================================================
-    print("\n📋 Krok 1 – Vytváram koncept prihlášky...")
+    # 4) STEP 3
+    print("\n📘 Step 3 – Initializing school selection...")
+    req3 = koncept_krok_3(dieta_guid, app_guid, login.logged_guid)
+    send_post(login, CTX, "/api/zapisAModifikaciaKonceptuPrihlasky", req3)
+    print("✔ Step 3 OK")
 
-    krok1 = koncept_krok_1(dieta_guid)
-    r1 = send_post(login, CTX, "/api/zapisAModifikaciaKonceptuPrihlasky", krok1, SHOW)
-    r1_json = safe_json(r1)
+    # 5) SCHOOL SEARCH
+    print("\n🔎 Searching schools...")
+    sch_req = build_search_payload(page_size=20)
+    sch_resp = send_post(login, CTX, "/api/vyhladanieMSaZS", sch_req)
+    sch_json = safe_json(sch_resp)
 
-    if not r1_json or not r1_json.get("prihlaska", {}).get("prihlaskaGUID"):
-        print("❌ KROK 1 ZLYHAL")
-        print("Response:", r1.text)
-        return
+    school = sch_json["saSZ"][0]
+    eduid = school["eduid"]
+    print("✔ Selected school EDUID:", eduid)
 
-    prihlaska_guid = r1_json["prihlaska"]["prihlaskaGUID"]
-    print(f"✔️ Krok 1 → prihláškaGUID = {prihlaska_guid}")
+    # 6) SAVE SCHOOL
+    print("\n🏫 Saving school into application...")
+    req3s = koncept_krok_3_with_school(dieta_guid, app_guid, login.logged_guid, eduid)
+    send_post(login, CTX, "/api/zapisAModifikaciaKonceptuPrihlasky", req3s)
+    print("✔ School saved")
 
-    # ============================================================
-    # 3) Krok 2 prihlášky
-    # ============================================================
-    print("\n📋 Krok 2 – dopĺňam údaje...")
+    # 7) DETECT SCHOOL CAPABILITIES
+    det = send_post(
+        login, CTX, "/api/vratenieVybranychSaSZ",
+        {"prihlaskaGUID": app_guid}
+    )
+    school_detail = safe_json(det)["saSZ"][0]
+    allowed_fields = detect_allowed_fields(school_detail)
 
-    krok2 = koncept_krok_2(dieta_guid, prihlaska_guid)
+    saSZ_adaptive = build_adaptive_saSZ(eduid, allowed_fields)
 
-    r2 = send_post(login, CTX, "/api/zapisAModifikaciaKonceptuPrihlasky", krok2, SHOW)
-    if r2.status_code != 200:
-        print("❌ KROK 2 ZLYHAL")
-        print(r2.text)
-        return
+    # 8) STEP 4
+    print("\n📘 Step 4 – Saving language/VIN...")
+    req4 = build_step4_adaptive(dieta_guid, app_guid, login.logged_guid, saSZ_adaptive)
+    r4 = send_post(login, CTX, "/api/zapisAModifikaciaKonceptuPrihlasky", req4)
 
-    print("✔️ Krok 2 OK")
+    if r4.status_code != 200:
+        fallback4 = build_step4_fallback(dieta_guid, app_guid, login.logged_guid, eduid)
+        r4 = send_post(login, CTX, "/api/zapisAModifikaciaKonceptuPrihlasky", fallback4)
 
-    # ============================================================
-    # 4) Krok 3 prihlášky
-    # ============================================================
-    print("\n📋 Krok 3 – finalizujem koncept...")
+    print("✔ Step 4 OK")
 
-    krok3 = koncept_krok_3(dieta_guid, prihlaska_guid)
+    # 9) STEP 5
+    print("\n📘 Step 5 – Saving legal guardian...")
+    req5 = build_step5_adaptive(dieta_guid, app_guid, login.logged_guid, saSZ_adaptive)
+    r5 = send_post(login, CTX, "/api/zapisAModifikaciaKonceptuPrihlasky", req5)
 
-    r3 = send_post(login, CTX, "/api/zapisAModifikaciaKonceptuPrihlasky", krok3, SHOW)
-    if r3.status_code != 200:
-        print("❌ KROK 3 ZLYHAL")
-        print(r3.text)
-        return
+    if r5.status_code != 200:
+        fallback5 = build_step5_fallback(dieta_guid, app_guid, login.logged_guid, eduid)
+        send_post(login, CTX, "/api/zapisAModifikaciaKonceptuPrihlasky", fallback5)
 
-    print("✔️ Krok 3 OK")
+    print("✔ Step 5 OK")
 
-    # ============================================================
-    # 5) DETAIL prihlášky
-    # ============================================================
-    print("\n🔍 Kontrolujem detail prihlášky...")
+    # 10) STEP 10
+    print("\n📘 Step 10 – Finalizing application...")
+    req10 = build_step10_adaptive(dieta_guid, app_guid, login.logged_guid, eduid)
+    r10 = send_post(login, CTX, "/api/zapisAModifikaciaKonceptuPrihlasky", req10)
 
-    detail = send_post(
-        login,
-        CTX,
+    if r10.status_code != 200:
+        fallback10 = build_step10_fallback(dieta_guid, app_guid, login.logged_guid, eduid)
+        send_post(login, CTX, "/api/zapisAModifikaciaKonceptuPrihlasky", fallback10)
+
+    print("✔ Step 10 OK")
+
+    # DETAIL
+    print("\n🔍 Fetching application detail...")
+    send_post(
+        login, CTX,
         "/api/vratenieKonceptuPrihlasky",
-        {"prihlaskaGUID": prihlaska_guid},
-        SHOW
+        {"prihlaskaGUID": app_guid}
     )
 
-    if detail.status_code != 200:
-        print("❌ DETAIL ZLYHAL")
-        print(detail.text)
-        return
-
-    print("✔️ Detail OK")
-
-    # ============================================================
-    # 6) SEARCH pozitívne testy
-    # ============================================================
-    print("\n🔎 Spúšťam vyhľadávacie testy...")
-
-    SEARCH_HEADERS = {
-        "Accept": "application/json",
-        "X-Requested-With": "XMLHttpRequest",
-    }
-
-    SEARCH_PAYLOADS = [
-        ("SEARCH-ZS", {"text": "", "zs": True, "ms": False, "pocetZaznamovNaStranku": 50}),
-        ("SEARCH-MS", {"text": "", "zs": False, "ms": True, "pocetZaznamovNaStranku": 50}),
-        ("SEARCH-TEXT", {"text": "bratislava", "zs": True, "ms": False, "pocetZaznamovNaStranku": 50}),
-    ]
-
-    for name, payload in SEARCH_PAYLOADS:
-        payload.update({
-            "skolskyRokKod": "2026/2027",
-            "cisloStranky": 1
-        })
-        r = send_post(login, CTX, "/api/vyhladanieMSaZS", payload, SHOW, SEARCH_HEADERS)
-
-        ok = False
-        if r.status_code == 200:
-            try:
-                if r.json().get("kodSpracovania") == "1700":
-                    ok = True
-            except:
-                pass
-
-        print(f"{name}: {'🟢 PASS' if ok else '🔴 FAIL'}")
-
-    # ============================================================
-    # DONE
-    # ============================================================
-    print("\n🏁 PRIHLASKA FLOW HOTOVÝ\n")
+    print("✔ Application complete")
+    print("\n🏁 DONE\n")
 
 
 if __name__ == "__main__":

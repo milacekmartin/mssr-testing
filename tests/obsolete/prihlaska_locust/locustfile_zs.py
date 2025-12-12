@@ -1,14 +1,13 @@
 import sys, os, uuid
-from locust import HttpUser, task, between
+from locust import HttpUser, task, between, events
 
-# FIX PYTHON PATH
 ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(ROOT)
 
 from login.saml_login import saml_login
 from helpers.http_wrapper import HttpWrapper
-from scenarios.zs_prihlaska import run_zs_scenario
 from config.env import HOST
+from tests.obsolete.prihlaska_locust.full_flow_locust import run_full_flow_locust
 
 
 class ZsScenarioUser(HttpUser):
@@ -16,22 +15,25 @@ class ZsScenarioUser(HttpUser):
     wait_time = between(1, 2)
 
     def on_start(self):
-        # unique user id (pre logovanie + debug)
         self.user_id = f"ZSUSER-{uuid.uuid4().hex[:6].upper()}"
 
-        # do SAML login only once per test
         if not hasattr(self.environment, "auth"):
-            print("🔐 Performing SAML login (cached for all users)…")
+            print("🔐 Performing SAML login (shared for all Locust users)…")
             self.environment.auth = saml_login()
 
-        # každý user používa rovnaký login objekt
         self.auth = self.environment.auth
-
-        # HTTP wrapper pre volania API
         self.http = HttpWrapper(self)
 
-        print(f"👤 {self.user_id} READY (ZŠ scenár)")
+        print(f"👤 {self.user_id} READY → running adaptive ZŠ scenario")
 
     @task
     def run_scenario(self):
-        run_zs_scenario(self, self.http)
+        try:
+            run_full_flow_locust(self.auth, self.http)
+        except Exception as e:
+            events.request_failure.fire(
+                request_type="FLOW",
+                name="ZS Full Flow",
+                response_time=0,
+                exception=e
+            )

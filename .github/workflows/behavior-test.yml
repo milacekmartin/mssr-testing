@@ -2,6 +2,24 @@ name: Locust Load Test (ZŠ scénár)
 
 on:
   workflow_dispatch:
+    inputs:
+      users:
+        description: "Number of concurrent users"
+        required: true
+        default: "10"
+      rampup:
+        description: "User spawn rate (users per second)"
+        required: true
+        default: "5"
+      duration:
+        description: "Test duration (e.g. 1m, 5m, 30s)"
+        required: true
+        default: "1m"
+      host:
+        description: "Target host (base URL)"
+        required: true
+        default: "https://test-eprihlasky.iedu.sk"
+
   push:
     branches:
       - main
@@ -17,62 +35,98 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # --- CHECKOUT REPO ---
+      # ==========================================================
+      # CHECKOUT REPO
+      # ==========================================================
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # --- INSTALL PYTHON ---
+      # ==========================================================
+      # SETUP PYTHON
+      # ==========================================================
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      # --- INSTALL DEPENDENCIES ---
+      # ==========================================================
+      # INSTALL DEPENDENCIES
+      # ==========================================================
       - name: Install dependencies
         run: |
           python3 -m pip install --upgrade pip
           pip install locust requests beautifulsoup4
 
       # ==========================================================
-      # RUN LOCUST LOADTEST (BEHAVIOR TEST)
+      # RESOLVE INPUTS (manual vs push defaults)
+      # ==========================================================
+      - name: Resolve inputs
+        id: vars
+        run: |
+          USERS="${{ github.event.inputs.users || '10' }}"
+          RAMPUP="${{ github.event.inputs.rampup || '5' }}"
+          DURATION="${{ github.event.inputs.duration || '1m' }}"
+          HOST="${{ github.event.inputs.host || 'https://test-eprihlasky.iedu.sk' }}"
+
+          echo "users=$USERS" >> $GITHUB_OUTPUT
+          echo "rampup=$RAMPUP" >> $GITHUB_OUTPUT
+          echo "duration=$DURATION" >> $GITHUB_OUTPUT
+          echo "host=$HOST" >> $GITHUB_OUTPUT
+
+          echo "▶ USERS=$USERS"
+          echo "▶ RAMPUP=$RAMPUP"
+          echo "▶ DURATION=$DURATION"
+          echo "▶ HOST=$HOST"
+
+      # ==========================================================
+      # RUN LOCUST LOAD TEST
       # ==========================================================
       - name: Run Locust ZŠ scénár
+        continue-on-error: true
         run: |
-          python3 -m locust -f locustfile_zs.py \
+          python3 -m locust \
+            -f tests/prihlaska/full_flow_locust.py \
             --headless \
-            -u 10 \
-            -r 10 \
-            -t 1m \
+            -u ${{ steps.vars.outputs.users }} \
+            -r ${{ steps.vars.outputs.rampup }} \
+            -t ${{ steps.vars.outputs.duration }} \
             --csv results \
             --html report.html \
             --only-summary \
-            --host https://test-eprihlasky.iedu.sk
-        continue-on-error: true   # 🔥 aj pri FAIL pokračuje workflow
+            --host ${{ steps.vars.outputs.host }}
 
       # ==========================================================
-      # GENERATE HTML + CSV + INDEX
+      # PREPARE HTML + CSV FOR GITHUB PAGES
       # ==========================================================
       - name: Prepare HTML for GitHub Pages
         if: ${{ always() }}
         run: |
           mkdir -p pages/loadtest
 
-          # Move html report
-          if [ -f report.html ]; then mv report.html pages/loadtest/report.html; fi
+          if [ -f report.html ]; then
+            mv report.html pages/loadtest/report.html
+          fi
 
-          # Move CSV files if exist
-          if [ -f results_stats.csv ]; then mv results_stats.csv pages/loadtest/; fi
-          if [ -f results_requests.csv ]; then mv results_requests.csv pages/loadtest/; fi
-          if [ -f results_failures.csv ]; then mv results_failures.csv pages/loadtest/; fi
+          if [ -f results_stats.csv ]; then
+            mv results_stats.csv pages/loadtest/
+          fi
+          if [ -f results_requests.csv ]; then
+            mv results_requests.csv pages/loadtest/
+          fi
+          if [ -f results_failures.csv ]; then
+            mv results_failures.csv pages/loadtest/
+          fi
 
-          # generate index
-          python3 utils/generate_html_report.py index
+          # optional index generator (ak existuje)
+          if [ -f utils/generate_html_report.py ]; then
+            python3 utils/generate_html_report.py index
+          fi
 
           echo "--- Pages folder content ---"
           ls -R pages
 
       # ==========================================================
-      # UPLOAD STATIC SITE
+      # UPLOAD PAGES ARTIFACT
       # ==========================================================
       - name: Upload GitHub Pages Artifact
         if: ${{ always() }}
@@ -81,7 +135,7 @@ jobs:
           path: pages
 
   # ==========================================================
-  # DEPLOYMENT JOB
+  # DEPLOY TO GITHUB PAGES
   # ==========================================================
   deploy-pages:
     needs: loadtest

@@ -1,56 +1,80 @@
-import json
+# helpers/http_wrapper.py
+# Unified HttpWrapper for Locust compatibility
+
 from config.env import HOST
 
 class HttpWrapper:
+    """
+    Thin wrapper over locust's self.client:
+    - adds correct headers (UI-identical)
+    - reuses SAML auth cookies & tokens
+    - provides http.post() and http.get()
+    """
+
     def __init__(self, user):
-        self.user = user
-        self.context = ""
+        self.user = user              # Locust user (HttpUser)
+        self.context = ""             # optional reporting context
         self.referer = f"{HOST}/Moj-profil2"
 
-    def set_context(self, ctx):
+    # ---------------------------------------------------------
+    # Context / referer setters (optional)
+    # ---------------------------------------------------------
+    def set_context(self, ctx: str):
         self.context = ctx
 
-    def set_referer(self, url):
+    def set_referer(self, url: str):
         self.referer = url
 
+    # ---------------------------------------------------------
+    # Build UI-level request headers
+    # ---------------------------------------------------------
     def _headers(self):
         return {
+            "Accept": "application/json",
             "Content-Type": "application/json; charset=UTF-8",
+            "Origin": HOST,
+            "Referer": self.referer,
             "RequestVerificationToken": self.user.auth.csrf,
             "x-token-descriptor": self.user.auth.token_desc,
             "Cookie": self.user.auth.cookie_bundle,
             "X-Requested-With": "XMLHttpRequest",
-            "Referer": self.referer
+            "User-Agent": "Mozilla/5.0",
         }
 
-    def post_scenario(self, endpoint, payload, name):
+    # ---------------------------------------------------------
+    # POST wrapper for Locust
+    # ---------------------------------------------------------
+    def post(self, endpoint: str, json=None, name=None):
+        name = name or endpoint
+        label = f"{self.context} | {name}" if self.context else name
+
         with self.user.client.post(
             endpoint,
-            json=payload,
+            json=json,
             headers=self._headers(),
-            name=f"{self.context} | {name}",
+            name=label,
             catch_response=True
         ) as resp:
+
+            if resp.status_code >= 400:
+                resp.failure(f"HTTP {resp.status_code}: {resp.text[:300]}")
             return resp
 
-    def post_extended_scenario(self, endpoint, payload, name):
-        headers = self._headers()
-        headers["Accept"] = "application/json"
-        with self.user.client.post(
-            endpoint,
-            json=payload,
-            headers=headers,
-            name=f"{self.context} | {name}",
-            catch_response=True
-        ) as resp:
-            return resp
+    # ---------------------------------------------------------
+    # GET wrapper for Locust
+    # ---------------------------------------------------------
+    def get(self, endpoint: str, params=None, name=None):
+        name = name or endpoint
+        label = f"{self.context} | {name}" if self.context else name
 
-    def get_scenario(self, endpoint, params, name):
         with self.user.client.get(
             endpoint,
             params=params,
             headers=self._headers(),
-            name=f"{self.context} | {name}",
+            name=label,
             catch_response=True
         ) as resp:
+
+            if resp.status_code >= 400:
+                resp.failure(f"HTTP {resp.status_code}: {resp.text[:300]}")
             return resp
