@@ -28,6 +28,7 @@ on:
 jobs:
   prihlaska:
     uses: ./.github/workflows/base_runtime.yml
+    secrets: inherit
     with:
       base_url: ${{ inputs.base_url }}
       idp_url:  ${{ inputs.idp_url }}
