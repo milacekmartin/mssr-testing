@@ -15,7 +15,7 @@ USERNAME = _get("LOGIN_USERNAME")
 PASSWORD = _get("LOGIN_PASSWORD")
 
 # ----------------------------------------------------------
-# LOCAL FALLBACK (iba ak nie sú ENV premenné)
+# LOCAL FALLBACK
 # ----------------------------------------------------------
 if not USERNAME or not PASSWORD:
     try:

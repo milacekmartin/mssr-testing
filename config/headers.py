@@ -1,10 +1,9 @@
 # config/headers.py
-# ==================
 
 from config.settings import HOST, CSRF, IAM_TOKEN, COOKIE_BUNDLE
 
 # ---------------------------------------------------------
-# COMMON HEADERS – používané pre bežné POST/GET
+# COMMON HEADERS
 # ---------------------------------------------------------
 
 COMMON_HEADERS = {
@@ -14,10 +13,8 @@ COMMON_HEADERS = {
     "Cookie": COOKIE_BUNDLE,
 }
 
-
 # ---------------------------------------------------------
-# EXTENDED HEADERS – pre vyhľadávanie, filtre, ciselníky
-# (presne podľa funkčného requestu)
+# EXTENDED HEADERS
 # ---------------------------------------------------------
 
 EXTENDED_HEADERS = {
@@ -29,7 +26,7 @@ EXTENDED_HEADERS = {
     "Cookie": COOKIE_BUNDLE,
     "Host": "test-eprihlasky.iedu.sk",
     "Origin": HOST,
-    "Referer": f"{HOST}/Prihlaska",  # bude prepisaný dynamicky
+    "Referer": f"{HOST}/Prihlaska",
     "RequestVerificationToken": CSRF,
     "Sec-Fetch-Dest": "empty",
     "Sec-Fetch-Mode": "cors", 
@@ -39,8 +36,8 @@ EXTENDED_HEADERS = {
     "sec-ch-ua": '"Google Chrome";v="141", "Not?A_Brand";v="8", "Chromium";v="141"',
     "sec-ch-ua-mobile": "?0",
     "sec-ch-ua-platform": '"macOS"',
-    "x-correlation-id": "",  # bude nastavené dynamicky
-    "x-token-descriptor": IAM_TOKEN,  # LOWERCASE!
+    "x-correlation-id": "",
+    "x-token-descriptor": IAM_TOKEN,
 }
 
 VYHLEDAVACIE_HEADERS = {
@@ -48,5 +45,5 @@ VYHLEDAVACIE_HEADERS = {
     "origin": HOST,
     "accept": "application/json, text/plain, */*",
     "content-type": "application/json;charset=UTF-8",
-    "referer": ""  # dynamicky sa nastaví cez http.set_referer()
+    "referer": ""
 }

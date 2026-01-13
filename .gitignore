@@ -3,3 +3,9 @@
 **/*.log
 
 **/local_credentials.py
+
+**tests/locust/temp
+**/tests/locust/logs
+**/tests/locust/reports
+
+**/scenarios

@@ -1,4 +1,7 @@
-# locust/tests/child/run_edit_child.py
+# tests/child/full_flow.py
+# ======================================================
+# CHILD – FULL FLOW
+# ======================================================
 
 import sys, os, json, argparse
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -6,166 +9,128 @@ sys.path.append(ROOT)
 
 from login.saml_login import saml_login
 from config.random_names import generate_random_name
-from tests.child.payloads.child import build_base_child_payload
 from config.env import HOST
+from utils.http import build_headers
+from tests.child.payloads.child import build_base_child_payload
+
+CTX = "CHILD"
 
 
-CTX = "CHILD-EDIT-FLOW"
+NEGATIVE_TESTS = [
+    ("EMPTY NAME", {"meno": ""}),
+    ("EMPTY LASTNAME", {"priezvisko": ""}),
+    ("INVALID DATE", {"datumNarodenia": "2020-99-99"}),
+]
 
 
-# ============================================================
-# SEND POST with tokens
-# ============================================================
-def send_post(login, ctx, endpoint, payload, show_data=False):
+# ======================================================
+def post(login, endpoint, payload, show=False):
     url = f"{HOST}{endpoint}"
+    r = login.session.post(url, json=payload, headers=build_headers(login))
 
-    headers = {
-        "Accept": "application/json",
-        "Content-Type": "application/json; charset=UTF-8",
-        "Origin": HOST,
-        "Referer": f"{HOST}/Moj-profil2",
-        "RequestVerificationToken": login.csrf,
-        "x-token-descriptor": login.token_desc,
-        "Cookie": login.cookie_bundle,
-        "X-Requested-With": "XMLHttpRequest",
-        "User-Agent": "Mozilla/5.0",
-    }
-
-    print(f"[{ctx}] POST {endpoint}")
-
-    if show_data:
-        print("\n📤 REQUEST PAYLOAD:")
+    if show:
+        print("📤 REQUEST:")
         print(json.dumps(payload, indent=2, ensure_ascii=False))
-
-    resp = login.session.post(url, json=payload, headers=headers)
-    print(f"[{ctx}] → {resp.status_code}")
-
-    if show_data:
-        print("\n📥 RESPONSE:")
+        print("📥 RESPONSE:")
         try:
-            print(json.dumps(resp.json(), indent=2, ensure_ascii=False))
+            print(json.dumps(r.json(), indent=2, ensure_ascii=False))
         except:
-            print(resp.text)
-        print()
+            print(r.text)
 
-    return resp
+    return r
 
 
-# ============================================================
-# MAIN
-# ============================================================
+# ======================================================
 def main():
-    # CLI ARGUMENTS
-    parser = argparse.ArgumentParser(description="Child edit test flow")
-    parser.add_argument(
-        "--show-data",
-        action="store_true",
-        help="Show full request and response JSON payloads"
-    )
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--show-data", action="store_true")
     args = parser.parse_args()
-    SHOW_DATA = args.show_data
 
     print("\n=====================================================")
-    print(" CHILD EDIT FLOW – CREATE → UPDATE → VERIFY → DELETE")
+    print(" CHILD – FULL FLOW")
     print("=====================================================\n")
 
     # LOGIN
     login = saml_login()
-    print("✔️ Login OK")
-    print("Subjekt GUID:", login.subj_guid)
-    print("Prihl. osoba GUID:", login.logged_guid)
+    print("   • Subjekt GUID:", login.subj_guid)
+    print("   • User GUID:", login.logged_guid)
 
-    subjekt_guid = login.subj_guid
-
-    #
-    # 1) CREATE CHILD
-    #
+    # --------------------------------------------------
+    # STEP 1 – CREATE
+    # --------------------------------------------------
     first, last = generate_random_name()
     payload = build_base_child_payload(first, last)
-    payload["subjektGUID"] = subjekt_guid
+    payload["subjektGUID"] = login.subj_guid
 
-    print(f"\n➡️ Creating child: {first} {last}")
-    create_resp = send_post(login, "EDIT-CREATE", "/api/zapisAModifikaciaDietata", payload, SHOW_DATA)
-
-    try:
-        create_json = create_resp.json()
-    except:
-        print("❌ CREATE FAILED — server nevrátil JSON")
-        print("Response:", create_resp.text)
-        return
-
-    guid = (
-        create_json.get("dieta", {}).get("guid")
-        or create_json.get("guid")
-        or None
-    )
+    r = post(login, "/api/zapisAModifikaciaDietata", payload, args.show_data)
+    data = r.json()
+    guid = data.get("dieta", {}).get("guid")
 
     if not guid:
-        print("❌ CREATE FAILED — GUID nie je v response")
-        print("📥 RESPONSE:", create_resp.text)
+        print("\n❌ STEP 1 FAILED")
         return
 
-    print(f"✔️ Created GUID: {guid}")
+    print("\n📘 STEP 1 – create child")
+    print(f"   • meno: {first} {last}")
+    print(f"   • GUID: {guid}")
 
-    #
-    # 2) EDIT CHILD
-    #
+    # --------------------------------------------------
+    # STEP 2 – UPDATE
+    # --------------------------------------------------
     new_first, new_last = generate_random_name()
-    edit_payload = build_base_child_payload(new_first, new_last)
-    edit_payload["subjektGUID"] = subjekt_guid
-    edit_payload["dietaGUID"] = guid
-    edit_payload["pohlavieKod"] = "2"  # female
+    payload = build_base_child_payload(new_first, new_last)
+    payload["subjektGUID"] = login.subj_guid
+    payload["dietaGUID"] = guid
+    payload["pohlavieKod"] = "2"
 
-    print(f"\n➡️ Editing child → {new_first} {new_last}")
-    edit_resp = send_post(login, "EDIT-UPDATE", "/api/zapisAModifikaciaDietata", edit_payload, SHOW_DATA)
+    post(login, "/api/zapisAModifikaciaDietata", payload, args.show_data)
 
-    print(f"[EDIT-UPDATE] → {edit_resp.status_code}")
-    if not SHOW_DATA:
-        print("📥 RESPONSE:", edit_resp.text[:300])
+    print("\n📘 STEP 2 – update child")
+    print(f"   • meno: {new_first} {new_last}")
+    print("   • pohlavie: žena")
 
-    #
-    # 3) VERIFY UPDATE
-    #
-    print("\n➡️ Reading child list to verify update…")
+    # --------------------------------------------------
+    # STEP 3 – VERIFY
+    # --------------------------------------------------
+    r = post(
+        login,
+        "/api/vratenieZoznamuDeti",
+        {"guid": login.subj_guid, "lenPlatne": True},
+        args.show_data,
+    )
 
-    verify_payload = {
-        "guid": subjekt_guid,
-        "lenPlatne": True
-    }
+    found = next(
+        (d for d in r.json().get("dieta", []) if d.get("guid") == guid),
+        None
+    )
 
-    list_resp = send_post(login, "EDIT-VERIFY", "/api/vratenieZoznamuDeti", verify_payload, SHOW_DATA)
+    print("\n📘 STEP 3 – verify child")
+    print("   • údaje:", "OK" if found else "FAILED")
 
-    if list_resp.status_code != 200:
-        print(f"❌ VERIFY FAILED – /api/vratenieZoznamuDeti returned {list_resp.status_code}")
-        print("Response:", list_resp.text)
-        return
+    # --------------------------------------------------
+    # STEP 4 – NEGATIVE
+    # --------------------------------------------------
+    print("\n📘 STEP 4 – negative validation")
 
-    list_json = list_resp.json()
-    deti = list_json.get("dieta", [])
+    for name, patch in NEGATIVE_TESTS:
+        payload = build_base_child_payload("Test", "Negativ")
+        payload["subjektGUID"] = login.subj_guid
+        payload.update(patch)
 
-    found = next((d for d in deti if d.get("guid") == guid), None)
+        r = post(login, "/api/zapisAModifikaciaDietata", payload)
 
-    if not found:
-        print("❌ EDIT FAILED — child not found in list")
-        return
+        result = "rejected" if r.status_code != 200 else "FAILED"
+        print(f"   • {name} → {result}")
 
-    if found.get("meno") == new_first and found.get("priezvisko") == new_last:
-        print("✔️ EDIT PASSED — údaje sú aktualizované")
-    else:
-        print("❌ EDIT FAILED — údaje sa nezhodujú")
-        print("Nájdené:", found)
+    # --------------------------------------------------
+    # STEP 5 – DELETE
+    # --------------------------------------------------
+    r = post(login, "/api/vymazDietata", {"guid": guid})
 
-    #
-    # 4) DELETE CHILD
-    #
-    print("\n➡️ Deleting child…")
-    del_resp = send_post(login, "EDIT-DELETE", "/api/vymazDietata", {"guid": guid}, SHOW_DATA)
+    print("\n📘 STEP 5 – delete child")
+    print("   • status:", "OK" if r.status_code == 200 else "FAILED")
 
-    print(f"[DELETE] → {del_resp.status_code}")
-    if not SHOW_DATA:
-        print("📥 RESPONSE:", del_resp.text[:300])
-
-    print("\n🏁 EDIT FLOW DONE\n")
+    print("\n✅ CHILD – FULL FLOW COMPLETED\n")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,38 @@
+name: Prihláška Tests (ZŠ + SŠ)
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Base application URL (ePrihlasky frontend / API)"
+        required: false
+        default: "https://test-eprihlasky.iedu.sk"
+        type: string
+
+      idp_url:
+        description: "Base TIAM Identity Provider URL"
+        required: false
+        default: "https://tiamidsk.iedu.sk"
+        type: string
+
+      username:
+        description: "Login username (overrides GitHub secret if provided)"
+        required: false
+        type: string
+
+      password:
+        description: "Login password (overrides GitHub secret if provided)"
+        required: false
+        type: string
+
+jobs:
+  prihlaska:
+    uses: ./.github/workflows/base_runtime.yml
+    with:
+      base_url: ${{ inputs.base_url }}
+      idp_url:  ${{ inputs.idp_url }}
+      username: ${{ inputs.username }}
+      password: ${{ inputs.password }}
+      python_command: |
+        python3 tests/prihlaska/ZS_full_flow.py
+        python3 tests/prihlaska/SS_full_flow.py

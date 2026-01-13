@@ -1,29 +1,23 @@
 # config/env.py
 
 # ============================================
-# BASE URL PRE TEST EPRIHLAŠKY
+# BASE URL
 # ============================================
 
 BASE_URL = "https://test-eprihlasky.iedu.sk"
-
-# komplet host
 HOST = BASE_URL.rstrip("/")
 
 # ============================================
-# TIAM / SAML KONŠTANTY
+# TIAM / SAML CONSTS
 # ============================================
 
-# Base TIAM Identity Provider
 TIAM_BASE = "https://tiamidsk.iedu.sk"
-
-# login stránka
 LOGIN_OSOBA_URL = f"{HOST}/loginosoba?returnurl=%2F"
 
-# Assertion Consumer Service
 ACS_URL = f"{HOST}/assertionconsumerservice"
 
 # ============================================
-# Cookies, ktoré chceme prenášať
+# Cookies
 # ============================================
 
 IMPORTANT_COOKIES = [

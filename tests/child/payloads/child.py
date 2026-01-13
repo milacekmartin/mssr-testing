@@ -1,8 +1,6 @@
-from config.settings import SUBJEKT_GUID
-
 def build_base_child_payload(first, last):
     return {
-        "subjektGUID": SUBJEKT_GUID,
+        "subjektGUID": None,
         "dietaGUID": None,
         "rodneCislo": None,
         "meno": first,
@@ -42,6 +40,5 @@ def build_base_child_payload(first, last):
         "miestoNarodeniaZRFO": False
     }
 
-# alias – aby staršie skripty fungovali
 def build_child_payload(first, last):
     return build_base_child_payload(first, last)

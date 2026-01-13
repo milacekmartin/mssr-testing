@@ -3,11 +3,7 @@ import sys
 import os
 import time
 import json
-import requests
 
-# ----------------------------------------------------------
-# ROOT IMPORT
-# ----------------------------------------------------------
 ROOT = os.path.dirname(os.path.abspath(__file__))
 PARENT = os.path.dirname(ROOT)
 sys.path.append(PARENT)
@@ -19,9 +15,6 @@ from config.env import HOST
 CTX = "CLEAN"
 
 
-# ----------------------------------------------------------
-# UNIFIED SEND POST
-# ----------------------------------------------------------
 def send_post(login, ctx, endpoint, payload, show_data=False):
     url = f"{HOST}{endpoint}"
 
@@ -57,9 +50,6 @@ def send_post(login, ctx, endpoint, payload, show_data=False):
     return resp
 
 
-# ----------------------------------------------------------
-#  PRÁCA S PRIHLÁŠKAMI
-# ----------------------------------------------------------
 def get_prihlasky(login, show_data=False):
     payload = {"SubjektGUID": login.subj_guid}
 
@@ -90,9 +80,6 @@ def delete_prihlaska(login, guid, show_data=False):
     return True
 
 
-# ----------------------------------------------------------
-#  PRÁCA S DEŤMI
-# ----------------------------------------------------------
 def get_deti(login, show_data=False):
     payload = {"guid": login.subj_guid, "lenPlatne": True}
 
@@ -123,9 +110,6 @@ def delete_dieta(login, guid, show_data=False):
     return True
 
 
-# ----------------------------------------------------------
-#  MAIN
-# ----------------------------------------------------------
 if __name__ == "__main__":
     SHOW = "--show-data" in sys.argv
 
@@ -142,7 +126,6 @@ if __name__ == "__main__":
 
     print("\n➡️ Začínam čistenie prihlášok...\n")
 
-    # 1) Vymaž prihlášky
     prihlasky = get_prihlasky(login, SHOW)
 
     for p in prihlasky:
@@ -153,7 +136,6 @@ if __name__ == "__main__":
 
     print("\n➡️ Začínam čistenie detí...\n")
 
-    # 2) Vymaž deti
     deti = get_deti(login, SHOW)
 
     for d in deti:

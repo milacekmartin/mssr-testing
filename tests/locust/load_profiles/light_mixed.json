@@ -1,0 +1,9 @@
+[
+    { "after": 0,   "users": 80,  "rate": 15 },
+    { "after": 60,  "users": 200, "rate": 15 },
+    { "after": 120, "users": 350, "rate": 15 },
+    { "after": 180, "users": 500, "rate": 15 },
+
+    { "after": 240, "users": 150, "rate": 30 },
+    { "after": 300, "users": 0,   "rate": 40 }
+]

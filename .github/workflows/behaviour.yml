@@ -1,0 +1,56 @@
+name: Behaviour Load Test (Locust)
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "Load profile from tests/locust/load_profiles"
+        required: true
+        default: "light_mixed"
+
+      base_url:
+        description: "Base application URL (ePrihlasky frontend / API)"
+        required: false
+        default: "https://test-eprihlasky.iedu.sk"
+        type: string
+
+      idp_url:
+        description: "Base TIAM Identity Provider URL"
+        required: false
+        default: "https://tiamidsk.iedu.sk"
+        type: string
+
+      username:
+        description: "Login username (overrides GitHub secret if provided)"
+        required: false
+        type: string
+
+      password:
+        description: "Login password (overrides GitHub secret if provided)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  behaviour:
+    uses: ./.github/workflows/base_runtime.yml
+    with:
+      base_url: ${{ inputs.base_url }}
+      idp_url:  ${{ inputs.idp_url }}
+      username: ${{ inputs.username }}
+      password: ${{ inputs.password }}
+
+      extra_env: |
+        export LOAD_PROFILE_NAME=${{ inputs.profile }}
+
+      python_command: |
+        python3 -m locust \
+          -f tests/locust/full_flow_spawn.py \
+          --headless \
+          --csv tests/locust/temp/results \
+          --html tests/locust/temp/report.html \
+          --only-summary
+
+        python3 tests/locust/utils/generate_pdf_report.py

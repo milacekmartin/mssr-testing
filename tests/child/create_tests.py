@@ -13,11 +13,10 @@ CTX = "CHILD-FLOW"
 
 
 # ============================================================
-# NEGATIVE TEST DEFINITIONS – komplet zoznam
+# NEGATIVE TEST DEFINITIONS
 # ============================================================
 NEGATIVE_TESTS = [
 
-    # pôvodné testy
     ("NEG-EMPTY-NAME",              {"meno": ""}),
     ("NEG-EMPTY-LASTNAME",          {"priezvisko": ""}),
     ("NEG-INVALID-DATE",            {"datumNarodenia": "2020-33-99"}),
@@ -29,7 +28,6 @@ NEGATIVE_TESTS = [
     ("NEG-LONG-MENO",               {"meno": "A"*300}),
     ("NEG-LONG-PRIEZVISKO",         {"priezvisko": "B"*300}),
 
-    # NOVÉ povinné polia (empty)
     ("NEG-EMPTY-DATE",              {"datumNarodenia": ""}),
     ("NEG-EMPTY-GENDER",            {"pohlavieKod": ""}),
     ("NEG-EMPTY-NARODNOST",         {"narodnostKod": ""}),
