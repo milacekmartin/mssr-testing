@@ -32,7 +32,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write   # 👈 POTREBNÉ na push do github-pages
 
 jobs:
   behaviour:
@@ -62,24 +62,37 @@ jobs:
 
         LOCUST_EXIT_CODE=$?
 
-        echo "Locust finished with exit code: ${LOCUST_EXIT_CODE}"
-
         python3 tests/locust/utils/generate_pdf_report.py
         python3 tests/locust/utils/generate_loadtest_dashboard.py
 
         exit ${LOCUST_EXIT_CODE}
 
   publish:
-    name: Publish Load Test Reports
+    name: Publish to GitHub Pages
     runs-on: ubuntu-latest
     needs: behaviour
     if: always()
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Upload load test reports
-        uses: actions/upload-artifact@v4
+      - name: Checkout github-pages branch
+        uses: actions/checkout@v4
         with:
-          name: behaviour-loadtest-report
-          path: pages/loadtest
+          ref: github-pages
+
+      - name: Clean old loadtest reports
+        run: |
+          rm -rf loadtest
+          mkdir -p loadtest
+
+      - name: Copy new loadtest reports
+        run: |
+          cp -r pages/loadtest/* loadtest/
+
+      - name: Commit and push reports
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git add loadtest
+          git commit -m "📊 Load test report (${GITHUB_RUN_NUMBER})" || echo "Nothing to commit"
+          git push
