@@ -7,6 +7,20 @@ on:
         description: "Load profile from tests/locust/load_profiles"
         required: true
         default: "light_mixed"
+        type: choice
+        options:
+          - baseline
+          - capacity
+          - light_baseline
+          - light_mixed
+          - light_peak
+          - light_spike
+          - peak
+          - regression
+          - soak
+          - spike
+          - stress
+          - warmup
 
       base_url:
         description: "Base application URL"
@@ -75,11 +89,13 @@ jobs:
       # --------------------------------------------------
       - name: Run Locust (Behaviour)
         run: |
-          set +e
+            set +e
 
-          echo "▶ Starting Locust (profile: ${LOAD_PROFILE_NAME})"
+            mkdir -p tests/locust/logs
 
-          python3 -m locust \
+            echo "▶ Starting Locust (profile: ${LOAD_PROFILE_NAME})"
+
+            python3 -m locust \
             -f tests/locust/full_flow_spawn.py \
             --headless \
             --csv tests/locust/temp/results \
@@ -87,7 +103,7 @@ jobs:
             --only-summary \
             2>&1 | tee tests/locust/logs/locust.log
 
-          echo "LOCUST_EXIT_CODE=$?" >> $GITHUB_ENV
+            echo "LOCUST_EXIT_CODE=$?" >> $GITHUB_ENV
 
       # --------------------------------------------------
       # REPORTING (ALWAYS)
