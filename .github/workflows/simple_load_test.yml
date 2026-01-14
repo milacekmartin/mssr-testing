@@ -38,13 +38,16 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
 jobs:
-  simple:
+  simple-loadtest:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -54,15 +57,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install locust requests beautifulsoup4
 
-      - name: Runtime environment
+      - name: Set runtime environment
         run: |
           echo "BASE_URL=${{ inputs.base_url }}" >> $GITHUB_ENV
           echo "IDP_URL=${{ inputs.idp_url }}" >> $GITHUB_ENV
           echo "LOGIN_USERNAME=${{ inputs.username || secrets.LOGIN_USERNAME }}" >> $GITHUB_ENV
           echo "LOGIN_PASSWORD=${{ inputs.password || secrets.LOGIN_PASSWORD }}" >> $GITHUB_ENV
 
-      - name: Run Simple Locust
+      - name: Run Simple Locust Test
         run: |
+          set +e
           mkdir -p pages/simple-loadtest
 
           python3 -m locust \
@@ -76,9 +80,43 @@ jobs:
             --only-summary \
             --host ${{ inputs.base_url }}
 
-      - name: Upload simple artifact
-        if: always()
-        uses: actions/upload-artifact@v4
+      - name: Ensure landing page
+        if: ${{ always() }}
+        run: |
+            mkdir -p pages
+            if [ ! -f pages/index.html ]; then
+                printf '%s\n' \
+                    '<!DOCTYPE html>' \
+                    '<html>' \
+                    '<head>' \
+                    '<meta charset="utf-8">' \
+                    '<title>Performance Reports</title>' \
+                    '</head>' \
+                    '<body>' \
+                    '<h1>Performance Test Reports</h1>' \
+                    '<ul>' \
+                    '<li><a href="loadtest/">Behaviour Load Tests</a></li>' \
+                    '<li><a href="simple-loadtest/">Simple Load Tests</a></li>' \
+                    '</ul>' \
+                    '</body>' \
+                    '</html>' \
+                    > pages/index.html
+                fi
+
+      - name: Upload GitHub Pages Artifact
+        if: ${{ always() }}
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: simple-pages
-          path: pages/simple-loadtest
+          path: pages
+
+  deploy-pages:
+    needs: simple-loadtest
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+    permissions:
+      pages: write
+      id-token: write
+
+    steps:
+      - uses: actions/deploy-pages@v4
