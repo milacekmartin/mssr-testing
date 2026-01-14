@@ -29,6 +29,7 @@ jobs:
         with:
           name: behaviour-pages
           path: pages/loadtest
+          run-id: ${{ github.event.workflow_run.id }}
         continue-on-error: true
 
       - name: Download simple report
@@ -36,6 +37,7 @@ jobs:
         with:
           name: simple-pages
           path: pages/simple-loadtest
+          run-id: ${{ github.event.workflow_run.id }}
         continue-on-error: true
 
       - name: Create landing page
