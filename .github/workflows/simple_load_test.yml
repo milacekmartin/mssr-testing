@@ -83,25 +83,25 @@ jobs:
       - name: Ensure landing page
         if: ${{ always() }}
         run: |
-          mkdir -p pages
-          if [ ! -f pages/index.html ]; then
-            cat <<'EOF' > pages/index.html
-                <!DOCTYPE html>
-                <html>
-                <head>
-                <meta charset="utf-8">
-                <title>Performance Reports</title>
-                </head>
-                <body>
-                <h1>Performance Test Reports</h1>
-                <ul>
-                    <li><a href="loadtest/">Behaviour Load Tests</a></li>
-                    <li><a href="simple-loadtest/">Simple Load Tests</a></li>
-                </ul>
-                </body>
-                </html>
-                EOF
-                        fi
+            mkdir -p pages
+            if [ ! -f pages/index.html ]; then
+                printf '%s\n' \
+                    '<!DOCTYPE html>' \
+                    '<html>' \
+                    '<head>' \
+                    '<meta charset="utf-8">' \
+                    '<title>Performance Reports</title>' \
+                    '</head>' \
+                    '<body>' \
+                    '<h1>Performance Test Reports</h1>' \
+                    '<ul>' \
+                    '<li><a href="loadtest/">Behaviour Load Tests</a></li>' \
+                    '<li><a href="simple-loadtest/">Simple Load Tests</a></li>' \
+                    '</ul>' \
+                    '</body>' \
+                    '</html>' \
+                    > pages/index.html
+                fi
 
       - name: Upload GitHub Pages Artifact
         if: ${{ always() }}

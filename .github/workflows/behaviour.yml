@@ -51,19 +51,31 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # --------------------------------------------------
+      # CHECKOUT
+      # --------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # --------------------------------------------------
+      # PYTHON
+      # --------------------------------------------------
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
+      # --------------------------------------------------
+      # DEPENDENCIES
+      # --------------------------------------------------
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # --------------------------------------------------
+      # RUNTIME ENV
+      # --------------------------------------------------
       - name: Set runtime environment
         run: |
           echo "BASE_URL=${{ inputs.base_url }}" >> $GITHUB_ENV
@@ -72,6 +84,9 @@ jobs:
           echo "LOGIN_PASSWORD=${{ inputs.password || secrets.LOGIN_PASSWORD }}" >> $GITHUB_ENV
           echo "LOAD_PROFILE_NAME=${{ inputs.profile }}" >> $GITHUB_ENV
 
+      # --------------------------------------------------
+      # LOCUST EXECUTION
+      # --------------------------------------------------
       - name: Run Locust (Behaviour)
         run: |
           set +e
@@ -89,35 +104,44 @@ jobs:
 
           echo "LOCUST_EXIT_CODE=$?" >> $GITHUB_ENV
 
+      # --------------------------------------------------
+      # REPORTING (ALWAYS)
+      # --------------------------------------------------
       - name: Generate PDF report and HTML dashboard
         if: ${{ always() }}
         run: |
           python3 tests/locust/utils/generate_pdf_report.py
           python3 tests/locust/utils/generate_loadtest_dashboard.py
 
+      # --------------------------------------------------
+      # ENSURE LANDING PAGE (NO HEREDOC)
+      # --------------------------------------------------
       - name: Ensure landing page
         if: ${{ always() }}
         run: |
           mkdir -p pages
           if [ ! -f pages/index.html ]; then
-            cat <<'EOF' > pages/index.html
-                <!DOCTYPE html>
-                <html>
-                <head>
-                <meta charset="utf-8">
-                <title>Performance Reports</title>
-                </head>
-                <body>
-                <h1>Performance Test Reports</h1>
-                <ul>
-                    <li><a href="loadtest/">Behaviour Load Tests</a></li>
-                    <li><a href="simple-loadtest/">Simple Load Tests</a></li>
-                </ul>
-                </body>
-                </html>
-                EOF
-                        fi
+            printf '%s\n' \
+              '<!DOCTYPE html>' \
+              '<html>' \
+              '<head>' \
+              '<meta charset="utf-8">' \
+              '<title>Performance Reports</title>' \
+              '</head>' \
+              '<body>' \
+              '<h1>Performance Test Reports</h1>' \
+              '<ul>' \
+              '<li><a href="loadtest/">Behaviour Load Tests</a></li>' \
+              '<li><a href="simple-loadtest/">Simple Load Tests</a></li>' \
+              '</ul>' \
+              '</body>' \
+              '</html>' \
+              > pages/index.html
+          fi
 
+      # --------------------------------------------------
+      # GITHUB PAGES ARTIFACT
+      # --------------------------------------------------
       - name: Upload GitHub Pages Artifact
         if: ${{ always() }}
         uses: actions/upload-pages-artifact@v3
