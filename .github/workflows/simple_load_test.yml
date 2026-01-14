@@ -1,0 +1,117 @@
+name: Simple Load Test (Locust)
+
+on:
+  workflow_dispatch:
+    inputs:
+      users:
+        description: "Number of concurrent users"
+        required: true
+        default: "10"
+
+      rampup:
+        description: "User spawn rate (users per second)"
+        required: true
+        default: "5"
+
+      duration:
+        description: "Test duration (e.g. 1m, 5m, 30s)"
+        required: true
+        default: "1m"
+
+      base_url:
+        description: "Base application URL"
+        required: false
+        default: "https://test-eprihlasky.iedu.sk"
+
+      idp_url:
+        description: "TIAM Identity Provider URL"
+        required: false
+        default: "https://tiamidsk.iedu.sk"
+
+      username:
+        description: "Login username (optional)"
+        required: false
+
+      password:
+        description: "Login password (optional)"
+        required: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  simple-loadtest:
+    runs-on: ubuntu-latest
+
+    steps:
+      # --------------------------------------------------
+      # CHECKOUT
+      # --------------------------------------------------
+      - uses: actions/checkout@v4
+
+      # --------------------------------------------------
+      # PYTHON
+      # --------------------------------------------------
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # --------------------------------------------------
+      # DEPENDENCIES
+      # --------------------------------------------------
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install locust requests beautifulsoup4
+
+      # --------------------------------------------------
+      # ENV
+      # --------------------------------------------------
+      - name: Set runtime environment
+        run: |
+          echo "BASE_URL=${{ inputs.base_url }}" >> $GITHUB_ENV
+          echo "IDP_URL=${{ inputs.idp_url }}" >> $GITHUB_ENV
+          echo "LOGIN_USERNAME=${{ inputs.username || secrets.LOGIN_USERNAME }}" >> $GITHUB_ENV
+          echo "LOGIN_PASSWORD=${{ inputs.password || secrets.LOGIN_PASSWORD }}" >> $GITHUB_ENV
+
+      # --------------------------------------------------
+      # RUN LOCUST (SIMPLE)
+      # --------------------------------------------------
+      - name: Run Simple Locust Test
+        run: |
+          set +e
+          mkdir -p pages/simple-loadtest
+
+          python3 -m locust \
+            -f tests/locust/full_flow_locust_all.py \
+            --headless \
+            -u ${{ inputs.users }} \
+            -r ${{ inputs.rampup }} \
+            -t ${{ inputs.duration }} \
+            --html pages/simple-loadtest/report.html \
+            --csv pages/simple-loadtest/results \
+            --only-summary \
+            --host ${{ inputs.base_url }}
+
+      # --------------------------------------------------
+      # PUBLISH PAGES
+      # --------------------------------------------------
+      - name: Upload GitHub Pages Artifact
+        if: ${{ always() }}
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages
+
+  deploy-pages:
+    needs: simple-loadtest
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+    permissions:
+      pages: write
+      id-token: write
+
+    steps:
+      - uses: actions/deploy-pages@v4
