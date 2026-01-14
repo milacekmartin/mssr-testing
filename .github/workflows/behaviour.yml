@@ -33,26 +33,35 @@ permissions:
 
 jobs:
   loadtest:
+    name: Run Behaviour Load Test
     runs-on: ubuntu-latest
 
     steps:
-      # --- CHECKOUT ---
+      # --------------------------------------------------
+      # CHECKOUT
+      # --------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # --- PYTHON ---
+      # --------------------------------------------------
+      # PYTHON
+      # --------------------------------------------------
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # --- DEPENDENCIES ---
+      # --------------------------------------------------
+      # DEPENDENCIES
+      # --------------------------------------------------
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # --- ENV ---
+      # --------------------------------------------------
+      # RUNTIME ENV
+      # --------------------------------------------------
       - name: Set runtime environment
         run: |
           echo "BASE_URL=${{ inputs.base_url }}" >> $GITHUB_ENV
@@ -61,10 +70,14 @@ jobs:
           echo "LOGIN_PASSWORD=${{ inputs.password || secrets.LOGIN_PASSWORD }}" >> $GITHUB_ENV
           echo "LOAD_PROFILE_NAME=${{ inputs.profile }}" >> $GITHUB_ENV
 
-      # --- RUN LOCUST ---
+      # --------------------------------------------------
+      # LOCUST EXECUTION
+      # --------------------------------------------------
       - name: Run Locust (Behaviour)
         run: |
           set +e
+
+          echo "▶ Starting Locust (profile: ${LOAD_PROFILE_NAME})"
 
           python3 -m locust \
             -f tests/locust/full_flow_spawn.py \
@@ -75,21 +88,18 @@ jobs:
 
           echo "LOCUST_EXIT_CODE=$?" >> $GITHUB_ENV
 
-      # --- REPORTS ---
-      - name: Generate PDF + Dashboard
+      # --------------------------------------------------
+      # REPORTING (ALWAYS)
+      # --------------------------------------------------
+      - name: Generate PDF report and HTML dashboard
         if: ${{ always() }}
         run: |
           python3 tests/locust/utils/generate_pdf_report.py
           python3 tests/locust/utils/generate_loadtest_dashboard.py
 
-      # --- PREPARE PAGES ---
-      - name: Prepare GitHub Pages content
-        if: ${{ always() }}
-        run: |
-          mkdir -p pages
-          cp -r pages/loadtest ./pages/loadtest
-
-      # --- UPLOAD PAGES ARTIFACT ---
+      # --------------------------------------------------
+      # GITHUB PAGES ARTIFACT
+      # --------------------------------------------------
       - name: Upload GitHub Pages Artifact
         if: ${{ always() }}
         uses: actions/upload-pages-artifact@v3
@@ -97,6 +107,7 @@ jobs:
           path: pages
 
   deploy-pages:
+    name: Deploy to GitHub Pages
     needs: loadtest
     runs-on: ubuntu-latest
     environment:
@@ -106,5 +117,5 @@ jobs:
       id-token: write
 
     steps:
-      - name: Deploy to GitHub Pages
+      - name: Deploy Pages
         uses: actions/deploy-pages@v4
