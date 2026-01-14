@@ -47,11 +47,20 @@ jobs:
         export LOAD_PROFILE_NAME=${{ inputs.profile }}
 
       python_command: |
+        set +e
+
         python3 -m locust \
-          -f tests/locust/full_flow_spawn.py \
-          --headless \
-          --csv tests/locust/temp/results \
-          --html tests/locust/temp/report.html \
-          --only-summary
+            -f tests/locust/full_flow_spawn.py \
+            --headless \
+            --csv tests/locust/temp/results \
+            --html tests/locust/temp/report.html \
+            --only-summary
+
+        LOCUST_EXIT_CODE=$?
+
+        echo "Locust finished with exit code: ${LOCUST_EXIT_CODE}"
 
         python3 tests/locust/utils/generate_pdf_report.py
+
+        exit ${LOCUST_EXIT_CODE}
+
