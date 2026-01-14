@@ -1,34 +1,41 @@
-import sys, datetime, html, os
+import sys
+import datetime
+import html
+import os
 
 def generate_html_report(title, log_text, output_file):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     html_content = f"""
+<!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8" />
-    <title>{title}</title>
-    <style>
-        body {{ font-family: Arial, sans-serif; padding: 20px; }}
-        h1 {{ color: #2c3e50; }}
-        pre {{
-            background: #f4f4f4;
-            padding: 15px;
-            border-radius: 5px;
-            white-space: pre-wrap;
-        }}
-    </style>
+  <meta charset="utf-8">
+  <title>{title}</title>
+  <style>
+    body {{ font-family: Arial, sans-serif; padding: 20px; }}
+    h1 {{ color: #2c3e50; }}
+    pre {{
+      background: #f4f4f4;
+      padding: 15px;
+      border-radius: 5px;
+      white-space: pre-wrap;
+    }}
+  </style>
 </head>
 <body>
-    <h1>{title}</h1>
-    <p><strong>Generated:</strong> {now}</p>
-    <h2>Raw Output</h2>
-    <pre>{html.escape(log_text)}</pre>
+  <h1>{title}</h1>
+  <p><strong>Generated:</strong> {now}</p>
+
+  <h2>Raw Output</h2>
+  <pre>{html.escape(log_text)}</pre>
+
+  <hr>
+  <p><a href="../index.html">⬅ Back to Reports Dashboard</a></p>
 </body>
 </html>
 """
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
-
     with open(output_file, "w", encoding="utf-8") as f:
         f.write(html_content)
 
@@ -37,45 +44,37 @@ def generate_index(output_path="pages/index.html"):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     html_index = f"""
+<!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8" />
-    <title>Test Reports Dashboard</title>
-    <style>
-        body {{ font-family: Arial, sans-serif; padding: 20px; }}
-        h1 {{ color: #1d3557; }}
-        ul {{ line-height: 1.8; }}
-        a {{ font-size: 18px; }}
-    </style>
+  <meta charset="utf-8">
+  <title>Performance Reports Dashboard</title>
+  <style>
+    body {{ font-family: Arial, sans-serif; padding: 20px; }}
+    h1 {{ color: #1d3557; }}
+    ul {{ line-height: 1.8; }}
+    a {{ font-size: 18px; }}
+  </style>
 </head>
 <body>
-    <h1>📊 Test Reports Dashboard</h1>
-    <p>Generated: {now}</p>
+  <h1>📊 Performance Test Reports</h1>
+  <p>Generated: {now}</p>
 
-    <h2>Child Tests</h2>
-    <ul>
-        <li><a href="child/create_tests_report.html">Create Tests Report</a></li>
-        <li><a href="child/full_flow_report.html">Full Flow Report</a></li>
-    </ul>
-
-    <h2>Load Tests</h2>
-    <ul>
-        <li><a href="loadtest/report.html">Locust HTML Report</a></li>
-        <li><a href="loadtest/results_stats.csv">Stats CSV</a></li>
-        <li><a href="loadtest/results_failures.csv">Failures CSV</a></li>
-    </ul>
-
+  <h2>Load Tests</h2>
+  <ul>
+    <li><a href="loadtest/">Behaviour Load Tests</a></li>
+    <li><a href="simple-loadtest/">Simple Load Tests</a></li>
+  </ul>
 </body>
 </html>
 """
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(html_index)
 
 
 if __name__ == "__main__":
-    if sys.argv[1] == "index":
+    if len(sys.argv) > 1 and sys.argv[1] == "index":
         generate_index()
     else:
         title = sys.argv[1]

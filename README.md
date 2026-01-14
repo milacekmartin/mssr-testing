@@ -278,7 +278,7 @@ Contains:
 #### Simple load tests
 
 ```
-https://milacekmartin.github.io/mssr-testing/simple-loadtest/
+https://milacekmartin.github.io/mssr-testing/simple-loadtest/report.html
 ```
 
 ---
