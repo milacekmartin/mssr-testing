@@ -32,10 +32,11 @@ on:
         type: string
 
 permissions:
-  contents: write   # 👈 POTREBNÉ na push do github-pages
+  contents: write   # REQUIRED for push to gh-pages
 
 jobs:
   behaviour:
+    name: Run Behaviour Load Test
     uses: ./.github/workflows/base_runtime.yml
     secrets: inherit
 
@@ -51,7 +52,7 @@ jobs:
       python_command: |
         set +e
 
-        echo "▶ Starting Locust with profile: ${LOAD_PROFILE_NAME}"
+        echo "▶ Starting Locust (profile: ${LOAD_PROFILE_NAME})"
 
         python3 -m locust \
           -f tests/locust/full_flow_spawn.py \
@@ -61,25 +62,34 @@ jobs:
           --only-summary
 
         LOCUST_EXIT_CODE=$?
+        echo "Locust finished with exit code: ${LOCUST_EXIT_CODE}"
 
+        echo "▶ Generating PDF report"
         python3 tests/locust/utils/generate_pdf_report.py
+
+        echo "▶ Generating HTML dashboard + ZIP artifacts"
         python3 tests/locust/utils/generate_loadtest_dashboard.py
 
         exit ${LOCUST_EXIT_CODE}
 
   publish:
-    name: Publish to GitHub Pages
+    name: Publish Reports to GitHub Pages
     runs-on: ubuntu-latest
     needs: behaviour
     if: always()
 
     steps:
-      - name: Checkout github-pages branch
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: github-pages
+          fetch-depth: 0
 
-      - name: Clean old loadtest reports
+      - name: Switch to gh-pages branch
+        run: |
+          git fetch origin gh-pages
+          git checkout gh-pages
+
+      - name: Clean previous loadtest reports
         run: |
           rm -rf loadtest
           mkdir -p loadtest
@@ -95,4 +105,4 @@ jobs:
 
           git add loadtest
           git commit -m "📊 Load test report (${GITHUB_RUN_NUMBER})" || echo "Nothing to commit"
-          git push
+          git push origin gh-pages
