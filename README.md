@@ -1,14 +1,14 @@
-# End‑to‑End Test Automation & Load Testing Framework
+# End-to-End Test Automation & Load Testing Framework
 
-This repository contains a **professional‑grade test automation and performance testing framework** for the *ePrihlášky* ecosystem. It covers:
+This repository contains a **professional-grade test automation and performance testing framework** for the *ePrihlášky* ecosystem. It covers:
 
 - **Functional API flows** (Child, ZŠ application, SŠ application, Search)
-- **End‑to‑end application flows** with real SAML authentication
-- **Load & stress testing** using Locust with dynamic user profiles
+- **End-to-end application flows** with real SAML authentication
+- **Load & stress testing** using Locust (simple and behavior-driven)
 - **Automated reporting** (HTML, CSV, PDF)
-- **CI/CD execution** via GitHub Actions
+- **CI/CD execution** via GitHub Actions with GitHub Pages publishing
 
-The framework is designed to be **deterministic, environment‑agnostic, and production‑like**, simulating real user behavior.
+The framework is designed to be **deterministic, environment-agnostic, and production-like**, simulating real user behavior.
 
 ---
 
@@ -31,6 +31,7 @@ Recommended:
 
 ```bash
 git clone <REPOSITORY_URL>
+cd <REPOSITORY_NAME>
 ```
 
 ### 2.2 Create virtual environment (recommended)
@@ -47,7 +48,7 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-If `requirements.txt` is not present, install manually:
+If `requirements.txt` is not present:
 
 ```bash
 pip install locust requests beautifulsoup4 pandas matplotlib reportlab
@@ -57,31 +58,23 @@ pip install locust requests beautifulsoup4 pandas matplotlib reportlab
 
 ## 3. Runtime Configuration
 
-The framework **does not hard‑code environments**.
+The framework **does not hard-code environments or credentials**.
 
-All runtime‑specific values are resolved dynamically from:
+Runtime values are resolved in the following priority:
 
-1. **Environment variables** (highest priority)
-2. **GitHub Secrets** (in CI)
-3. **Defaults defined in `config/env.py` and `config/runtime.py`**
+1. **Environment variables**
+2. **GitHub Secrets** (CI)
+3. **Defaults in `config/env.py` and `config/runtime.py`**
 
-### Key runtime variables
+### Key variables
 
 | Variable | Description | Example |
 |--------|------------|--------|
-| `HOST` | Base application URL | `https://test-eprihlasky.iedu.sk` |
-| `TIAM_BASE` | Identity Provider (TIAM) URL | `https://tiamidsk.iedu.sk` |
-| `LOGIN_USERNAME` | Login username | `user@example.com` |
+| `BASE_URL` | Application base URL | https://test-eprihlasky.iedu.sk |
+| `IDP_URL` | TIAM Identity Provider URL | https://tiamidsk.iedu.sk |
+| `LOGIN_USERNAME` | Login username | user@example.com |
 | `LOGIN_PASSWORD` | Login password | *(secret)* |
-| `LOAD_PROFILE_NAME` | Locust load profile | `baseline`, `light_mixed`, `stress` |
-
-Example:
-
-```bash
-export HOST=https://test-eprihlasky.iedu.sk
-export LOGIN_USERNAME=user@example.com
-export LOGIN_PASSWORD=******
-```
+| `LOAD_PROFILE_NAME` | Locust load profile | light_mixed |
 
 ---
 
@@ -93,63 +86,39 @@ All flows use **real SAML authentication** implemented in:
 login/saml_login.py
 ```
 
-The login process:
+Process:
 1. Redirect to application login
 2. Redirect to TIAM IdP
 3. Submit credentials
 4. Process SAML response
-5. Extract CSRF token, session cookies, subject GUIDs
+5. Extract CSRF token and session cookies
 
-Login is:
-- **Executed once per test run** in Locust
-- **Shared across users** for performance realism
+Authentication is:
+- Executed once per run
+- Reused for Locust users
+- Never logged with sensitive data
 
 ---
 
 ## 5. Functional Test Execution (Local)
 
-### 5.1 Child – CRUD tests
+### 5.1 Child – CRUD
 
 ```bash
 python3 tests/child/full_flow.py --show-data
 ```
 
-Covers:
-- Create child
-- Update child
-- Verify data
-- Delete child
-
----
-
-### 5.2 ZŠ application – full flow
+### 5.2 ZŠ application
 
 ```bash
 python3 tests/prihlaska/ZS_full_flow.py --show-data
 ```
 
-Steps:
-1. Create child
-2. Create application
-3. Complementary data
-4. School search
-5. School selection
-6. Finalization
-7. Submit application
-
----
-
-### 5.3 SŠ application – full flow (capability‑driven)
+### 5.3 SŠ application
 
 ```bash
 python3 tests/prihlaska/SS_full_flow.py --show-data
 ```
-
-Includes:
-- Dynamic school capability detection
-- Adaptive steps (talent exams, grades, competitions)
-
----
 
 ### 5.4 Search (Vyhľadávanie)
 
@@ -157,157 +126,176 @@ Includes:
 python3 tests/vyhladavanie/full_flow.py --show-data
 ```
 
-Covers:
-- MS search
-- ZŠ search
-- SŠ search
-- Pagination, filters, combinations
-
 ---
 
 ## 6. Load & Stress Testing (Locust)
 
-### 6.1 Available scenarios
+### 6.1 Simple load test (users / ramp-up / duration)
 
-- **Child CRUD**
-- **ZŠ application**
-- **SŠ application**
-- **Search (MS / ZŠ / SŠ)**
-- **Random cleanup**
+Local run:
 
-All combined in:
-
+```bash
+python3 -m locust   -f tests/locust/full_flow_locust_all.py   --headless   -u 50   -r 5   -t 2m   --html report.html   --csv results
 ```
-tests/locust/full_flow_locust_all.py
-```
+
+Used mainly for:
+- quick smoke load
+- sanity performance checks
 
 ---
 
-### 6.2 Load profiles
+### 6.2 Behaviour load test (profile-driven)
 
-Load profiles are defined as JSON files:
+Profiles are defined in:
 
 ```
 tests/locust/load_profiles/
 ```
 
-Example:
+Each profile represents a **realistic load pattern** used in enterprise performance testing.
+
+#### Available load profiles
+
+| Profile | Description |
+|-------|------------|
+| `baseline` | Very low, stable traffic. Used for environment sanity and monitoring validation. |
+| `light_baseline` | Light steady load simulating normal off-peak usage. |
+| `light_mixed` | Mixed functional usage under light load (default profile). |
+| `light_peak` | Short light peak on top of baseline traffic. |
+| `light_spike` | Sudden short spike followed by recovery. |
+| `capacity` | Gradual ramp-up to identify system capacity limits. |
+| `peak` | High peak load representing worst expected production traffic. |
+| `spike` | Aggressive spike to test auto-scaling and error handling. |
+| `soak` | Long-running steady load to detect memory leaks and degradation. |
+| `regression` | Reproducible load pattern used for performance regression comparison. |
+| `warmup` | Short warm-up run to stabilize caches and JVM/application state. |
+| `stress` | Load beyond expected limits to observe failure behavior and recovery. |
+
+Example profile file:
 
 ```json
 [
-  {"after": 0, "users": 10, "rate": 2},
-  {"after": 60, "users": 50, "rate": 5},
-  {"after": 120, "users": 0, "rate": 1}
+  {"after": 0, "users": 50, "rate": 5},
+  {"after": 300, "users": 200, "rate": 10},
+  {"after": 600, "users": 0, "rate": 20}
 ]
 ```
 
-Select profile via environment variable:
+Run locally:
 
 ```bash
 export LOAD_PROFILE_NAME=light_mixed
+
+python3 -m locust   -f tests/locust/full_flow_spawn.py   --headless   --csv tests/locust/temp/results   --html tests/locust/temp/report.html   --only-summary
 ```
 
 ---
 
-### 6.3 Run Locust (headless)
+## 7. Reporting
 
-```bash
-LOAD_PROFILE_NAME=light_mixed \
-python3 -m locust \
-  -f tests/locust/full_flow_spawn.py \
-  --headless \
-  --csv tests/locust/temp/results \
-  --html tests/locust/temp/report.html \
-  --only-summary
-```
+### Generated artifacts
 
-What happens:
-- Load profile controls user ramp‑up
-- Full mixed scenario is executed
-- CSV + HTML reports are generated
+- **Locust HTML report**
+- **CSV statistics**
+- **Failures CSV**
+- **PDF executive report**
+- **ZIP logs archive**
 
----
-
-## 7. Automatic Reports
-
-### 7.1 Archive results
-
-```bash
-python3 tests/locust/utils/archive_results.py
-```
-
-Creates ZIP archive with:
-- HTML report
-- CSV statistics
-- Failures
-
----
-
-### 7.2 Generate PDF report
+### PDF generation
 
 ```bash
 python3 tests/locust/utils/generate_pdf_report.py
 ```
 
-The PDF includes:
-- Test context (URL, profile, methodology)
-- Load charts (users, RPS)
-- Response times (avg, p95)
-- Endpoint overview
+Includes:
+- Test context (profile, URLs, user)
+- Load overview
+- Response times
 - Error analysis
 - Recommendations
 
 ---
 
-## 8. GitHub Actions (CI/CD)
+## 8. GitHub Actions – How to Run Tests
 
-The repository contains **professional reusable pipelines** for:
+### 8.1 Configure secrets (once)
 
-- Child tests
-- ZŠ application tests
-- SŠ application tests
-- Search tests
-- Full behavior / load testing
+In **Repository → Settings → Secrets and variables → Actions**, define:
 
-All pipelines:
-- Can be **triggered manually** (`workflow_dispatch`)
-- Allow **runtime configuration** (URLs, credentials, profiles)
-- Use **GitHub Secrets by default**
-- Publish **artifacts and reports** automatically
+- `LOGIN_USERNAME`
+- `LOGIN_PASSWORD`
+
+These are used by default if workflow inputs are not provided.
+
+---
+
+### 8.2 Running Behaviour Load Test
+
+1. Go to **GitHub → Actions**
+2. Select **Behaviour Load Test (Locust)**
+3. Click **Run workflow**
+4. Fill inputs:
+   - **profile** – load profile (dropdown)
+   - **base_url** – optional (default is test environment)
+   - **idp_url** – optional
+   - **username / password** – optional (override secrets)
+
+5. Click **Run workflow**
+
+---
+
+### 8.3 Running Simple Load Test
+
+1. Go to **GitHub → Actions**
+2. Select **Simple Load Test**
+3. Click **Run workflow**
+4. Fill inputs:
+   - users
+   - ramp-up
+   - duration
+   - base_url (optional)
+   - credentials (optional)
+
+---
+
+### 8.4 Where to find results
+
+#### Behaviour / profile-driven load tests
+
+Published automatically to **GitHub Pages**:
+
+```
+https://milacekmartin.github.io/mssr-testing/loadtest/
+```
+
+Contains:
+- Dashboard (`index.html`)
+- PDF report
+- Locust HTML
+- CSV results
+- Logs ZIP
+
+#### Simple load tests
+
+```
+https://milacekmartin.github.io/mssr-testing/simple-loadtest/
+```
 
 ---
 
 ## 9. Project Philosophy
 
-- ❌ No hard‑coded credentials
-- ❌ No hard‑coded environments
-- ✅ Real authentication
-- ✅ Real workflows
-- ✅ Deterministic test data
-- ✅ Production‑grade reporting
+- No hard-coded credentials
+- No hard-coded environments
+- Real authentication
+- Real workflows
+- Production-grade reporting
 
-This framework is suitable for:
-- Performance benchmarking
-- Regression testing
+Designed for:
 - CI quality gates
+- Performance benchmarking
 - Capacity planning
-
----
-
-## 10. Support & Extension
-
-The architecture is modular:
-
-- Add new flows easily
-- Extend payload builders safely
-- Add new load profiles without code changes
-
-If you need:
-- SLA validation
-- Threshold‑based pipeline failures
-- Trend comparison across runs
-
-The framework is already prepared for it.
+- Regression load testing
 
 ---
 
@@ -316,9 +304,6 @@ The framework is already prepared for it.
 **Ing. Martin Miláček**  
 Professional Test Automation s.r.o.
 
-📧 Email: martin.milacek@professional-test-automation.com  
-📱 Phone: +421 911 239 661  
-🌐 Website: https://professional-test-automation.com
-
-This project and its automation framework were designed and implemented by Professional Test Automation s.r.o.  
-All scripts, pipelines, and testing methodologies reflect real-world enterprise QA and performance testing practices.
+📧 martin.milacek@professional-test-automation.com  
+📱 +421 911 239 661  
+🌐 https://professional-test-automation.com
