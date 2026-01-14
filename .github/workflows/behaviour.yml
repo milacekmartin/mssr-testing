@@ -84,7 +84,8 @@ jobs:
             --headless \
             --csv tests/locust/temp/results \
             --html tests/locust/temp/report.html \
-            --only-summary
+            --only-summary \
+            2>&1 | tee tests/locust/logs/locust.log
 
           echo "LOCUST_EXIT_CODE=$?" >> $GITHUB_ENV
 
