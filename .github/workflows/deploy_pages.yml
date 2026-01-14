@@ -1,0 +1,63 @@
+name: Deploy Reports to GitHub Pages
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Behaviour Load Test (Locust)
+      - Simple Load Test (Locust)
+    types:
+      - completed
+
+permissions:
+  pages: write
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Prepare pages structure
+        run: |
+          mkdir -p pages/loadtest
+          mkdir -p pages/simple-loadtest
+
+      - name: Download behaviour report
+        uses: actions/download-artifact@v4
+        with:
+          name: behaviour-pages
+          path: pages/loadtest
+        continue-on-error: true
+
+      - name: Download simple report
+        uses: actions/download-artifact@v4
+        with:
+          name: simple-pages
+          path: pages/simple-loadtest
+        continue-on-error: true
+
+      - name: Create landing page
+        run: |
+          printf '%s\n' \
+            '<!DOCTYPE html>' \
+            '<html>' \
+            '<head><meta charset="utf-8"><title>Performance Reports</title></head>' \
+            '<body>' \
+            '<h1>Performance Test Reports</h1>' \
+            '<ul>' \
+            '<li><a href="loadtest/">Behaviour Load Tests</a></li>' \
+            '<li><a href="simple-loadtest/">Simple Load Tests</a></li>' \
+            '</ul>' \
+            '</body>' \
+            '</html>' \
+            > pages/index.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
