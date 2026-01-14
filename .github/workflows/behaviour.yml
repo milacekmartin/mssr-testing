@@ -7,6 +7,7 @@ on:
         description: "Load profile from tests/locust/load_profiles"
         required: true
         default: "light_mixed"
+        type: string
 
       base_url:
         description: "Base application URL (ePrihlasky frontend / API)"
@@ -37,6 +38,7 @@ jobs:
   behaviour:
     uses: ./.github/workflows/base_runtime.yml
     secrets: inherit
+
     with:
       base_url: ${{ inputs.base_url }}
       idp_url:  ${{ inputs.idp_url }}
@@ -49,18 +51,23 @@ jobs:
       python_command: |
         set +e
 
+        echo "▶ Starting Locust with profile: ${LOAD_PROFILE_NAME}"
+
         python3 -m locust \
-            -f tests/locust/full_flow_spawn.py \
-            --headless \
-            --csv tests/locust/temp/results \
-            --html tests/locust/temp/report.html \
-            --only-summary
+          -f tests/locust/full_flow_spawn.py \
+          --headless \
+          --csv tests/locust/temp/results \
+          --html tests/locust/temp/report.html \
+          --only-summary
 
         LOCUST_EXIT_CODE=$?
 
         echo "Locust finished with exit code: ${LOCUST_EXIT_CODE}"
 
+        echo "▶ Generating PDF report"
         python3 tests/locust/utils/generate_pdf_report.py
 
-        exit ${LOCUST_EXIT_CODE}
+        echo "▶ Generating HTML dashboard + ZIP artifacts"
+        python3 tests/locust/utils/generate_loadtest_dashboard.py
 
+        exit ${LOCUST_EXIT_CODE}
